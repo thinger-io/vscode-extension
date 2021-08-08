@@ -64,7 +64,7 @@ async function getToken() : Promise<string | undefined>{
     // if not defined, try to initialize it from input box
     if(!token){
         token = await vscode.window.showInputBox({
-            prompt: 'Insert a Thinger.io account Token with permissions for ListDevices and AccessDeviceResources'
+            prompt: 'Insert a Thinger.io account Token with permissions for: ListDevices, AccessDeviceResources, ReadDeviceStatistics.'
         });
         if(token) await vscode.workspace.getConfiguration('thinger-io').update('token', token, vscode.ConfigurationTarget.Global);
     }
@@ -75,7 +75,7 @@ async function getDevice(context: vscode.ExtensionContext) : Promise<string | un
     // try to get device from configuration
     let device = context.workspaceState.get<string>('device');
     // if not defined, try to get it from input box
-    if(!device) device = await pickDevice();
+    if(!device) device = await selectDevice(context);
     return device;
 } 
 
@@ -122,9 +122,13 @@ async function getPlatformioTask() {
 }
 
 async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
-    // ensure we have a token or ask user to insert it
-    const token : string | undefined = await getToken();
-    if(!token) return;
+    // get user and device for the OTA process
+    const user = await getUser();
+    if(!user) return;
+
+    // ensure we have a device selected or ask the user for it
+    const device : string | undefined = await getDevice(context);
+    if(!device) return;
 
     // default wildcard search inside of .pio/build
     let searchPath = "**";
@@ -176,11 +180,6 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
     
     // if no environment is available, then return
     if(!environment) return;
-
-    // get user and device for the OTA process
-    const user = await getUser();
-    const device = await getDevice(context);
-    if(!user || !device) return;
 
     // get firmware file path
     let firmwareFile = envs[environment].path;
@@ -341,32 +340,51 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
     });
 }
 
+let selectDeviceBarItem : vscode.StatusBarItem;
+
+async function selectDevice(context: vscode.ExtensionContext){
+    // ensure we have a token
+    const token = await getToken();
+    if(!token) return;
+
+    // show device picker
+    const device = await pickDevice();
+    if(!device) return;
+
+    // update device in configuration 
+    await context.workspaceState.update('device', device);
+
+    selectDeviceBarItem.text = `$(rocket) ${device}`;
+    initStateListener(context, selectDeviceBarItem);
+    return device;
+}
+
 function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
 {
     // create a new status bar item that we can now manage
-    const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+    selectDeviceBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
     const switchDeviceCommand = 'thinger-io.switchDevice';
+
+    context.workspaceState.update('device', undefined);
+
 
     context.subscriptions.push(vscode.commands.registerCommand(switchDeviceCommand, async () => 
     {   
-        const token = await getToken();
-        if(!token) return;
-        const device = await pickDevice();
-        if(!device) return;
-        await context.workspaceState.update('device', device);
-        item.text = `$(rocket) ${device}`;
-        initStateListener(context, item);
+        await selectDevice(context);
     }));
 
-    item.text = `$(rocket) ${context.workspaceState.get('device')}`;
-    item.tooltip = `Switch Thinger.io Device Target`;
-    item.command = switchDeviceCommand;
-    context.subscriptions.push(item);
-    item.show();
-    initStateListener(context, item);
+    const device = context.workspaceState.get('device');
+    selectDeviceBarItem.text = `$(rocket) ${device || ''}`;
+    selectDeviceBarItem.tooltip = `Switch Thinger.io Device Target`;
+    selectDeviceBarItem.command = switchDeviceCommand;
+    context.subscriptions.push(selectDeviceBarItem);
+    selectDeviceBarItem.show();
+    if(device){
+        initStateListener(context, selectDeviceBarItem);
+    }
 }
 
-function createStatusBarItem(context: vscode.ExtensionContext)
+function createUploadFirmwareBarItem(context: vscode.ExtensionContext)
 {
     const upload = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
     const flashCommand = 'thinger-io.uploadFirmware';
@@ -400,7 +418,7 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
     const device = context.workspaceState.get<string>('device');
     const token = await getToken();
     const user = await getUser();
-    if(!host || !port || !user || !token) return;
+    if(!host || !port || !user || !token || !device) return;
 
     // initialize event source 
     if(evtSource) evtSource.close();
@@ -449,6 +467,9 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
+    // TODO, wor on Output channel for relevant logging?
+    //let thingerLog = vscode.window.createOutputChannel("Thinger.io");
+    
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Thinger.io plugin activated');
@@ -479,7 +500,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     
     createSwitchDeviceBarItem(context);
-	createStatusBarItem(context);    
+	createUploadFirmwareBarItem(context);    
 }
 
 // this method is called when your extension is deactivated
