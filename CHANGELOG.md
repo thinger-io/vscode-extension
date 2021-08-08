@@ -1,9 +1,5 @@
-# Change Log
+# Release Notes
 
-All notable changes to the "thinger-io" extension will be documented in this file.
+## 1.0.0 (2021-08-08)
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
-## [Unreleased]
-
-- Initial release
+- Initial Plugin Version
