@@ -8,7 +8,8 @@ This extensions allows to easily do OTA for ESP8266 or ESP32 devices.
 
 ## Requirements
 
-PlatformIO extension is required to use OTA features.
+- VSCode PlatformIO extension is required to use OTA features.
+- A device connected to Thinger.io with OTA enabled.
 
 ## Extension Settings
 
@@ -21,11 +22,3 @@ This extension contributes the following settings:
 ## Known Issues
 
 Only works with ESP32 library
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of Thinger.io OTA for ESP8266 or ESP32 devices.
