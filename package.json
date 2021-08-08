@@ -4,7 +4,7 @@
 	"displayName": "Thinger.io",
 	"description": "Thinger.io integration for OTA updates.",
 	"license": "MIT",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"engines": {
 		"vscode": "^1.54.0"
 	},

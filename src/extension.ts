@@ -365,9 +365,6 @@ function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
     selectDeviceBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
     const switchDeviceCommand = 'thinger-io.switchDevice';
 
-    context.workspaceState.update('device', undefined);
-
-
     context.subscriptions.push(vscode.commands.registerCommand(switchDeviceCommand, async () => 
     {   
         await selectDevice(context);
