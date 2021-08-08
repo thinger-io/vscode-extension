@@ -1,0 +1,107 @@
+{
+	"publisher": "thinger-io",
+	"name": "thinger-ota",
+	"displayName": "Thinger.io OTA",
+	"description": "Thinger.io integration for OTA updates.",
+	"license": "MIT",
+	"version": "1.0.0",
+	"engines": {
+		"vscode": "^1.54.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Debuggers",
+		"Other"
+	],
+	"keywords": [
+		"embedded",
+		"debug",
+		"c",
+		"c++",
+		"microcontroller",
+		"esp32",
+		"esp8266"
+	  ],
+	"icon":"resources/thinger-logo.png",
+	"homepage": "https://thinger.io",
+	"author": {
+		"name": "Thinger.io"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/thinger-io/vscode-extension.git"
+	},
+	"activationEvents": [
+		"workspaceContains:.pio"
+	],
+	"extensionDependencies": [
+		"platformio.platformio-ide"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "thinger-io.switchDevice",
+				"title": "Switch Target Device",
+				"category": "Thinger.io"
+			},
+			{
+				"command": "thinger-io.uploadFirmware",
+				"title": "Upload Firmware",
+				"category": "Thinger.io"
+			}
+		],
+		"configuration": {
+			"title": "Thinger.io",
+			"properties": {
+				"thinger-io.host": {
+					"type": "string",
+					"default": "iot.thinger.io",
+					"description": "Thinger.io Backend Host"
+				},
+				"thinger-io.port": {
+					"type": "number",
+					"default": 443,
+					"description": "Specifies the default port"
+				},
+				"thinger-io.token": {
+					"type": "string",
+					"default": "",
+					"description": "Token for accessing Thinger.io account"
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "webpack",
+		"watch": "webpack --watch",
+		"package": "webpack --mode production --devtool hidden-source-map",
+		"test-compile": "tsc -p ./",
+		"test-watch": "tsc -watch -p ./",
+		"pretest": "npm run test-compile && npm run lint",
+		"lint": "eslint src --ext ts",
+		"test": "node ./out/test/runTest.js"
+	},
+	"dependencies": {
+		"axios": "^0.21.1",
+		"eventsource": "1.1.0",
+		"jwt-decode": "3.1.2"
+	},
+	"devDependencies": {
+		"@types/glob": "^7.1.3",
+		"@types/mocha": "^8.0.4",
+		"@types/node": "^12.11.7",
+		"@types/vscode": "^1.54.0",
+		"@typescript-eslint/eslint-plugin": "^4.14.1",
+		"@typescript-eslint/parser": "^4.14.1",
+		"eslint": "^7.19.0",
+		"glob": "^7.1.6",
+		"mocha": "^8.2.1",
+		"ts-loader": "^8.0.14",
+		"typescript": "^4.1.3",
+		"vscode-test": "^1.5.0",
+		"webpack": "^5.19.0",
+		"webpack-cli": "^4.4.0"
+	}
+}
