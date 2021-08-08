@@ -1,7 +1,7 @@
 {
 	"publisher": "thinger-io",
-	"name": "thinger-ota",
-	"displayName": "Thinger.io OTA",
+	"name": "thinger-io",
+	"displayName": "Thinger.io",
 	"description": "Thinger.io integration for OTA updates.",
 	"license": "MIT",
 	"version": "1.0.0",
