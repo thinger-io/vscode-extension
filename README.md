@@ -1,22 +1,24 @@
 # Thinger.io
 
-A Visual Studio Code extension that provides remote OTA updates for ESP8266 and ESP32 over Thinger.io. This extension integrates with PlatformIO to automatically build and upload the firmware to your devices.
+A Visual Studio Code extension that provides remote OTA updates for ESP8266 and ESP32 over Thinger.io. 
 
-![](https://s3.eu-west-1.amazonaws.com/thinger.io.files/vscode/ota-feature.gif)
+This extension integrates with PlatformIO to automatically build and upload the firmware to your devices over the Internet.
+
+![](https://s3.eu-west-1.amazonaws.com/thinger.io.files/vscode/iot-ota.gif)
 
 ## Features
 
-* OTA updates directly from the Internet
+* OTA updates directly from the Internet over Thinger.io
 * Device switcher to select the target device for the update
 * Real-tme device connection status
-* Compatible with multiple PlatformIO configuration environments inside a project
+* Compatible with multiple PlatformIO configuration environments inside a Project
 * Automatic build and upload in one click
 * OTA with compression support both on ESP8266 and ESP32
 
 ## Requirements
 
-* VSCode PlatformIO extension is required to use OTA features.
-* Thinger.io Arduino Library flashed on the device.
+* VSCode PlatformIO extension for building firmware.
+* Thinger.io Arduino Library.
 
 ## Extension Settings
 

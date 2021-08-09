@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.0.3 (2021-08-09)
+## 1.0.4 (2021-08-09)
 
 - Added Espressif ESP8266 OTA Support!
 - Added MD5 checksum verification for updates
