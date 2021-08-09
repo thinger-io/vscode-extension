@@ -121,6 +121,15 @@ async function getPlatformioTask() {
     });
 }
 
+function get_checksum(hash : string, data : Uint8Array){
+    try{
+        const crypto = require('crypto');
+        return crypto.createHash(hash).update(data).digest('hex');
+    }catch(e: any){
+        return undefined;
+    }
+}
+
 async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
     // get user and device for the OTA process
     const user = await getUser();
@@ -214,6 +223,18 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             message: 'Initializing OTA Update ...',
         });
 
+        // initialize basic begin options
+        let beginOptions : any = {
+            firmware: environment,
+            version: '',
+            size: file.byteLength,
+            chunk_size: chunkSize
+            // other options
+            // checksum if the device sent checksum in its options
+            // compressed_size, if device sets 'compression'
+            // compressed_checksum if compression and checksum
+        };
+
         // configure OTA based on device options
         try{
             const options = await axios.get(resource + 'options');
@@ -229,19 +250,48 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             // adjust chunk size based on device settings
             if(options.data.block_size){
                 console.log("setting chunk size from device to:", options.data.block_size);
-                chunkSize = options.data.block_size;        
+                chunkSize = options.data.block_size; 
+                beginOptions.chunk_size = chunkSize;       
             }
 
-            // check if supports compressed firmware
-            if(options.data.compression==='gzip'){
+             // check if supports compressed firmware
+             if(options.data.compression){
                 try{
-                    const zlib = require('zlib');
-                    deflated = zlib.deflateSync(file);
-                    console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                    switch(options.data.compression){
+                        case 'zlib': {
+                            const zlib = require('zlib');
+                            deflated = zlib.deflateSync(file);
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            beginOptions.compressed_size = deflated.byteLength;
+                        }
+                            break;
+                        case 'gzip': {
+                            const zlib = require('zlib');
+                            deflated = zlib.gzipSync(file);
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            beginOptions.compressed_size = deflated.byteLength;
+                        }
+                        default:
+                            console.error(`Unsupported compresssion schema: ${options.data.compression}`);
+                            break;    
+                    }           
                 }catch(error: any){
                     console.error(error);
                 }
             }
+
+            // generate checksumm from original file and compressed 
+            if(options.data.checksum==='md5'){
+                // generate checksum for original binary
+                beginOptions.checksum = get_checksum('md5', file);
+
+                // generate checksum for compressed version
+                if(deflated.byteLength>0){
+                    beginOptions.compressed_checksum = get_checksum('md5', deflated);
+                }
+            }
+           
+
         }catch(error: any){
             console.error(error);
             vscode.window.showErrorMessage('Cannot get OTA Options: ' + error);
@@ -249,17 +299,18 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
         }
                 
         try{
+            console.log("beginning OTA update with the following options:", beginOptions);
+
             // notify the device we are going to begin the OTA process
-            const beginOK = await axios.post(resource + 'begin', {
-                firmware: environment,
-                version: '',
-                size: file.byteLength,
-                compressed_size: deflated.byteLength
-            });
+            const beginOK = await axios.post(resource + 'begin', beginOptions);
 
             // ensure the device OTA begin is OK! 
             if(beginOK.data.success!==true){
-                vscode.window.showErrorMessage('Device cannot initialize OTA!');
+                if(beginOK.data.error){
+                    vscode.window.showErrorMessage(`Error while initializing OTA: ${beginOK.data.error}`);
+                }else{
+                    vscode.window.showErrorMessage('Device cannot initialize OTA!');
+                }
                 return;
             }
         }catch(error: any){
@@ -272,6 +323,8 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
         const otaFirmware = deflated.byteLength > 0 ? deflated : file;
         const otaSize = otaFirmware.byteLength;
         const otaChunks = Math.ceil(otaSize/chunkSize);
+
+        console.log("Sending OTA Firmware:", otaSize, otaFirmware);
 
         // iterate over all firmware chunks
         const otaStart = new Date();
@@ -292,7 +345,11 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                 // check ota chunk has been processed correctly
                 if(!writeChunk.data.success){
                     console.error(writeChunk.data);
-                    vscode.window.showErrorMessage('Error while writing to device: invalid firmware part');
+                    if(writeChunk.data.error){
+                        vscode.window.showErrorMessage(`Error while writing to device: ${writeChunk.data.error}`);
+                    }else{
+                        vscode.window.showErrorMessage('Error while writing to device: invalid firmware part?');
+                    }
                     return;
                 }
 
@@ -322,7 +379,17 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             progress.report({ 
                 message: 'Ending OTA Update ...' 
             });
-            const endOK = await axios.post(resource + 'end', {});
+            const endOK = await axios.post(resource + 'end');
+
+            // check ota chunk has been processed correctly
+            if(!endOK.data.success){
+                if(endOK.data.error){
+                    vscode.window.showErrorMessage(`Error while ending OTA update: ${endOK.data.error}`);
+                }else{
+                    vscode.window.showErrorMessage('Error while ending OTA update: bad image or checksum?');
+                }                
+                return;
+            }
         }catch(error){
             console.error(error);
             vscode.window.showErrorMessage('Error while ending OTA update: ' + error);
