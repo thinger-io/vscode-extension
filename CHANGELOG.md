@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.0.5 (2021-08-24)
+
+- Add configuration to disable SSL verification for local deployments
+- Add command to palette for clearing selected device
+- Device search box now also query by device name
+- Improved OTA cancellation mechanism in any step
+- Preliminar support for LZSS compression for Arduno devices
+- OTA Speedup (~15%) with HTTP Keep-Alive (see recommendations on Readme)
+
 ## 1.0.4 (2021-08-09)
 
 - Added Espressif ESP8266 OTA Support!

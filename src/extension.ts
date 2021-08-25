@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import path = require('path');
-const axios = require('axios');
 const EventSource = require("eventsource");
 import jwt_decode from "jwt-decode";
-import { resolve } from 'node:dns';
+import * as axiosConfig from './axios-instance';
+import axios, { AxiosRequestConfig } from 'axios';
+const axiosInstance = axiosConfig.getInstance();
 
 async function getUser() : Promise<string | undefined>{
     const token = await getToken();
@@ -17,27 +18,45 @@ async function getUser() : Promise<string | undefined>{
     }
 }
 
-async function getDevices(search: String){
+async function getDevices(search: String, config: AxiosRequestConfig){
     let user = await getUser();
-    let resource = `/v1/users/${user}/devices?name=${search}&type=Generic`;
-    return axios.get(resource);
+    let resource = `/v1/users/${user}/devices?name=${search}&type=Generic&count=10`;
+    return axiosInstance.get(resource, config);
 }
 
 async function pickDevice() : Promise<string | undefined> {
     return await new Promise<string | undefined>((resolve, reject) => {
         const input = vscode.window.createQuickPick<vscode.QuickPickItem>();
         input.placeholder = 'Select or search a device';
+        input.matchOnDescription = true;
+        let source : any = undefined;
+        let config : AxiosRequestConfig = {};
+
         function doSearch(value : string){
+            // update the current cancel token
+            source = axios.CancelToken.source();
+            config = {cancelToken: source.token};
+            
+            // if control is busy, clear pending request
+            if(input.busy){
+                console.log("cancelling pending request");
+                source.cancel();
+            }
+
+            // do search
             input.busy = true;
-            getDevices(value).then((result:any) => {
-                input.busy = false;
+            getDevices(value, config).then((response:any) => {
                 let items: vscode.QuickPickItem[] = [];
-                result.data.forEach((element:any) => {
+                response.data.forEach((element:any) => {
                     items.push({label: element.device, description: element.name, detail: element.description});
                 });
                 input.items = items;
-            }).catch( (error:any) => {
-                input.busy = false;    
+            }).catch((error:any) => {
+                if(!axios.isCancel(error)){
+                    console.error(error);
+                }
+            }).finally(()=>{
+                input.busy = false; 
             });
         }
         input.onDidChangeValue(value => {
@@ -213,8 +232,13 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
         let sent = 0;
         let cancelled = false;
 
+        // create a cancel token for stopping axios requests
+        const source = axios.CancelToken.source();
+        const config = {cancelToken: source.token};
+
         // register cancel action over upload
         cancelToken.onCancellationRequested(() => {
+            source.cancel();
             cancelled = true;
         });
 
@@ -237,7 +261,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
 
         // configure OTA based on device options
         try{
-            const options = await axios.get(resource + 'options');
+            const options = await axiosInstance.get(resource + 'options', config);
 
             console.log('Got device OTA options:', options.data);
 
@@ -271,6 +295,14 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                             console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
                             beginOptions.compressed_size = deflated.byteLength;
                         }
+                            break;
+                        case 'lzss': {
+                            const lzjs = require('lzjs');
+                            deflated = Buffer.from(lzjs.compress(file));
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            beginOptions.compressed_size = deflated.byteLength;
+                        }
+                            break;
                         default:
                             console.error(`Unsupported compresssion schema: ${options.data.compression}`);
                             break;    
@@ -293,8 +325,10 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
            
 
         }catch(error: any){
-            console.error(error);
-            vscode.window.showErrorMessage('Cannot get OTA Options: ' + error);
+            if(!axios.isCancel(error)) {
+                console.error(error);
+                vscode.window.showErrorMessage('Cannot initialize OTA: ' + error);
+            }
             return;
         }
                 
@@ -302,7 +336,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             console.log("beginning OTA update with the following options:", beginOptions);
 
             // notify the device we are going to begin the OTA process
-            const beginOK = await axios.post(resource + 'begin', beginOptions);
+            const beginOK = await axiosInstance.post(resource + 'begin', beginOptions, config);
 
             // ensure the device OTA begin is OK! 
             if(beginOK.data.success!==true){
@@ -314,8 +348,10 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                 return;
             }
         }catch(error: any){
-            console.error(error);
-            vscode.window.showErrorMessage('Cannot begin OTA Upgrade: ' + error);
+            if(!axios.isCancel(error)) {
+                console.error(error);
+                vscode.window.showErrorMessage('Cannot begin OTA Upgrade: ' + error);
+            }
             return;
         }
 
@@ -335,12 +371,12 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
 
             // try to send chunk data to device
             try{
-                const writeChunk = await axios.post(resource + 'write', 
-                    chunkData, 
-                    { headers: { 
-                        'Content-Type' : "application/octet-stream",
-                    }} 
-                );
+                const writeChunk = await axiosInstance.post(resource + 'write', chunkData, {
+                    cancelToken: source.token,
+                    headers : {
+                        'Content-Type' : 'application/octet-stream'
+                    }
+                });
 
                 // check ota chunk has been processed correctly
                 if(!writeChunk.data.success){
@@ -354,8 +390,10 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                 }
 
             }catch(error){
-                console.error(error);
-                vscode.window.showErrorMessage('Error while writing to device: ' + error);
+                if(!axios.isCancel(error)) {
+                    console.error(error);
+                    vscode.window.showErrorMessage('Error while writing to device: ' + error);
+                }
                 return;
             }
 
@@ -379,7 +417,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             progress.report({ 
                 message: 'Ending OTA Update ...' 
             });
-            const endOK = await axios.post(resource + 'end');
+            const endOK = await axiosInstance.post(resource + 'end', undefined, config);
 
             // check ota chunk has been processed correctly
             if(!endOK.data.success){
@@ -391,15 +429,17 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                 return;
             }
         }catch(error){
-            console.error(error);
-            vscode.window.showErrorMessage('Error while ending OTA update: ' + error);
+            if(!axios.isCancel(error)) {
+                console.error(error);
+                vscode.window.showErrorMessage('Error while ending OTA update: ' + error);
+            }
             return;
         }
         
         // reboot the device so the firmware applies
         try{
             progress.report({ message: 'Rebooting Device ...' });
-            const restart = await axios.post(resource + 'reboot');
+            const restart = await axiosInstance.post(resource + 'reboot', undefined, config);
         }catch(error){
             console.error(error);
             vscode.window.showErrorMessage('Error while rebooting device: ' + error);
@@ -426,26 +466,44 @@ async function selectDevice(context: vscode.ExtensionContext){
     return device;
 }
 
-function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
+async function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
 {
     // create a new status bar item that we can now manage
     selectDeviceBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-    const switchDeviceCommand = 'thinger-io.switchDevice';
 
+    // register command for device switch
+    const switchDeviceCommand = 'thinger-io.switchDevice';
     context.subscriptions.push(vscode.commands.registerCommand(switchDeviceCommand, async () => 
     {   
         await selectDevice(context);
     }));
 
+    // register command for device clear
+    const clearDeviceCommand = 'thinger-io.clearDevice';
+    context.subscriptions.push(vscode.commands.registerCommand(clearDeviceCommand, async () => 
+    {   
+         await context.workspaceState.update('device', undefined);
+         selectDeviceBarItem.text = `$(rocket)`;
+         initStateListener(context, selectDeviceBarItem);
+    }));
+
+    // configure switch device button
     const device = context.workspaceState.get('device');
     selectDeviceBarItem.text = `$(rocket) ${device || ''}`;
     selectDeviceBarItem.tooltip = `Switch Thinger.io Device Target`;
     selectDeviceBarItem.command = switchDeviceCommand;
     context.subscriptions.push(selectDeviceBarItem);
     selectDeviceBarItem.show();
-    if(device){
-        initStateListener(context, selectDeviceBarItem);
-    }
+    
+    // initiate device stat listener
+    await initStateListener(context, selectDeviceBarItem);
+    
+    // re-init state listener if configuration changes
+    vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('thinger-io')) {
+            initStateListener(context, selectDeviceBarItem);
+        }
+    });
 }
 
 function createUploadFirmwareBarItem(context: vscode.ExtensionContext)
@@ -479,23 +537,12 @@ let evtSource : any;
 async function initStateListener(context: vscode.ExtensionContext, item : vscode.StatusBarItem){
     const host = vscode.workspace.getConfiguration('thinger-io').get('host');
     const port = vscode.workspace.getConfiguration('thinger-io').get('port');
+    const secure = vscode.workspace.getConfiguration('thinger-io').get('secure');
     const device = context.workspaceState.get<string>('device');
     const token = await getToken();
     const user = await getUser();
-    if(!host || !port || !user || !token || !device) return;
-
-    // initialize event source 
-    if(evtSource) evtSource.close();
-    let url = `https://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
-    let config = {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    };
-    evtSource = new EventSource(url, config);
-    evtSource.reconnectInterval = 5000;
-
-    // change color according to 
+    
+    // change color according to connection status
     function setConnected(connected : boolean): void{
         console.log("SSE - Connected:", connected);
         if(connected){
@@ -504,6 +551,27 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
             item.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
         }
     }
+
+    if(!host || !port || !user || !token || !device){
+        if(evtSource) evtSource.close();
+        evtSource = undefined;
+        setConnected(false);
+        return;
+    }
+
+    // initialize event source 
+    if(evtSource) evtSource.close();
+    let url = `https://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
+    let config = {
+        https: {
+            rejectUnauthorized: secure
+        },
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    };
+    evtSource = new EventSource(url, config);
+    evtSource.reconnectInterval = 5000;
 
     evtSource.onerror = function (err:any) {
         if (err) {
@@ -529,7 +597,7 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
     // TODO, wor on Output channel for relevant logging?
     //let thingerLog = vscode.window.createOutputChannel("Thinger.io");
@@ -537,33 +605,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Thinger.io plugin activated');
-
-    // set default timeout for requests
-    axios.defaults.timeout = 15000;
-
-    // create axios interceptor to automatically set host, port, and authorization
-    axios.interceptors.request.use(async (config: any) => {
-        if (config.url && config.url.charAt(0) === '/') {
-            const token = await getToken();    
-            if(!token) return false;
-            const host = vscode.workspace.getConfiguration('thinger-io').get('host');
-            const port = vscode.workspace.getConfiguration('thinger-io').get('port');
-            //const decoded = Object(jwt_decode(token));
-            //const user = String(decoded.usr);
-            config.url = `https://${host}:${port}${config.url}`; 
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        console.log('Thinger.io Request: ', config)
-        return config;    
-    });
-      
-    axios.interceptors.response.use((response: any) => {
-        console.log('Thinger.io Response:', response)
-        return response;
-    });
-
-    
-    createSwitchDeviceBarItem(context);
+    await createSwitchDeviceBarItem(context);
 	createUploadFirmwareBarItem(context);    
 }
 

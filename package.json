@@ -4,7 +4,7 @@
 	"displayName": "Thinger.io",
 	"description": "Thinger.io integration for OTA updates.",
 	"license": "MIT",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"engines": {
 		"vscode": "^1.54.0"
 	},
@@ -21,8 +21,8 @@
 		"microcontroller",
 		"esp32",
 		"esp8266"
-	  ],
-	"icon":"resources/thinger-logo.png",
+	],
+	"icon": "resources/thinger-logo.png",
 	"homepage": "https://thinger.io",
 	"author": {
 		"name": "Thinger.io"
@@ -46,6 +46,11 @@
 				"category": "Thinger.io"
 			},
 			{
+				"command": "thinger-io.clearDevice",
+				"title": "Clear Target Device",
+				"category": "Thinger.io"
+			},
+			{
 				"command": "thinger-io.uploadFirmware",
 				"title": "Upload Firmware",
 				"category": "Thinger.io"
@@ -63,6 +68,11 @@
 					"type": "number",
 					"default": 443,
 					"description": "Specifies the default port"
+				},
+				"thinger-io.secure": {
+					"type": "boolean",
+					"default": true,
+					"description": "Verify SSL/TLS connection (recommended)"
 				},
 				"thinger-io.token": {
 					"type": "string",
@@ -84,9 +94,11 @@
 		"test": "node ./out/test/runTest.js"
 	},
 	"dependencies": {
+		"agentkeepalive": "4.1.4",
 		"axios": "^0.21.1",
 		"eventsource": "1.1.0",
-		"jwt-decode": "3.1.2"
+		"jwt-decode": "3.1.2",
+		"lzjs": "1.3.0"
 	},
 	"devDependencies": {
 		"@types/glob": "^7.1.3",
