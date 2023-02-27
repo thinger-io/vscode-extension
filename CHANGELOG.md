@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.0.6 (2023-02-24)
+
+- Added compatibility with Platformio IDE > 3.0.0
+- Allow connection to Thinger.io Server without TLS/SSL
+
 ## 1.0.5 (2021-08-24)
 
 - Add configuration to disable SSL verification for local deployments

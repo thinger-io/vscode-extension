@@ -36,7 +36,7 @@ async function pickDevice() : Promise<string | undefined> {
             // update the current cancel token
             source = axios.CancelToken.source();
             config = {cancelToken: source.token};
-            
+
             // if control is busy, clear pending request
             if(input.busy){
                 console.log("cancelling pending request");
@@ -63,14 +63,14 @@ async function pickDevice() : Promise<string | undefined> {
             doSearch(value);
         });
         input.onDidChangeSelection(items => {
-            const item = items[0];			
+            const item = items[0];
             resolve(item.label);
             input.hide();
         });
         input.onDidHide(() => {
             resolve(undefined);
             input.dispose();
-        });       
+        });
         input.show();
         doSearch('');
     });
@@ -96,7 +96,7 @@ async function getDevice(context: vscode.ExtensionContext) : Promise<string | un
     // if not defined, try to get it from input box
     if(!device) device = await selectDevice(context);
     return device;
-} 
+}
 
 async function executeBuildTask(task: vscode.Task) {
     const execution = await vscode.tasks.executeTask(task);
@@ -114,13 +114,27 @@ async function executeBuildTask(task: vscode.Task) {
 async function getPlatformioTask() {
     return new Promise<[vscode.Task | undefined, string | undefined]>(resolve => {
         vscode.tasks.fetchTasks().then((tasks) => {
-            
             try{
                 let platformio = vscode.extensions.getExtension('platformio.platformio-ide');
-                let projects = platformio?.exports.context.globalState.get('projects');
-                let lastProjectDir = projects.lastProjectDir;
-                let activeEnv = projects.projects[lastProjectDir].activeEnv;
-    
+                let globalState = platformio?.exports.context.globalState;
+                console.info(globalState.get('showedReleaseNotesFor'));
+
+                let majorVersion = parseInt(globalState.get('showedReleaseNotesFor')[0]);
+
+                let projects, lastProjectDir, activeEnv;
+                if ( majorVersion >= 3 ) {
+                    console.info("Platformio version is >= 3");
+                    projects = globalState.get('projects');
+                    lastProjectDir = globalState.get('lastProjectDir');
+                    activeEnv = projects[lastProjectDir].activeEnv;
+                } else {
+                    console.info("Platformio version is < 3");
+
+                    projects = globalState.get('projects');
+                    lastProjectDir = projects.lastProjectDir;
+                    activeEnv = projects.projects[lastProjectDir].activeEnv;
+                }
+
                 for(let i=0; i<tasks.length; i++){
                     const task = tasks[i];
                     if(task.source==='PlatformIO'){
@@ -132,9 +146,10 @@ async function getPlatformioTask() {
                     }
                 }
             }catch(e: any){
+                console.error("caracola0");
                 console.error(e);
             }
-        
+
             resolve([undefined, undefined]);
         });
     });
@@ -176,7 +191,9 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                 searchPath = buildTasks[1];
             }
         }else{
-            vscode.window.showWarningMessage('Platformio Build Task cannot be found!'); 
+            // stop upload when build task is not found
+            vscode.window.showWarningMessage('Platformio Build Task cannot be found!');
+            return;
         }
     }catch(e: any){
         console.error(e);
@@ -194,18 +211,18 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
 
     // iterate over all firmware.bin founds and fill available environments
     uris.forEach((uri: vscode.Uri) => { 
-        let name = path.basename(path.dirname(uri.path));    
+        let name = path.basename(path.dirname(uri.path));
         envs[name]= {
             path: uri
-        }     
+        }
     });
-   
+
     // determine environment to use (will show a picker if more than one is available)
-    const environments = Object.keys(envs);            
-    let environment :string |undefined = environments.length===1 ? 
-        environments[0] : 
+    const environments = Object.keys(envs);
+    let environment :string |undefined = environments.length===1 ?
+        environments[0] :
         await vscode.window.showQuickPick( Object.keys(envs),{ placeHolder: 'select environment' });
-    
+
     // if no environment is available, then return
     if(!environment) return;
 
@@ -267,15 +284,15 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
 
             // check OTA is enabled for the device
             if(!options.data.enabled){
-                vscode.window.showInformationMessage('OTA Updates are disabled on this device!'); 
+                vscode.window.showInformationMessage('OTA Updates are disabled on this device!');
                 return;
             }
 
             // adjust chunk size based on device settings
             if(options.data.block_size){
                 console.log("setting chunk size from device to:", options.data.block_size);
-                chunkSize = options.data.block_size; 
-                beginOptions.chunk_size = chunkSize;       
+                chunkSize = options.data.block_size;
+                beginOptions.chunk_size = chunkSize;
             }
 
              // check if supports compressed firmware
@@ -285,28 +302,28 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                         case 'zlib': {
                             const zlib = require('zlib');
                             deflated = zlib.deflateSync(file);
-                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength);
                             beginOptions.compressed_size = deflated.byteLength;
                         }
                             break;
                         case 'gzip': {
                             const zlib = require('zlib');
                             deflated = zlib.gzipSync(file);
-                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength);
                             beginOptions.compressed_size = deflated.byteLength;
                         }
                             break;
                         case 'lzss': {
                             const lzjs = require('lzjs');
                             deflated = Buffer.from(lzjs.compress(file));
-                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength); 
+                            console.log("device supports compressed OTA, compression ratio:", file.byteLength/deflated.byteLength);
                             beginOptions.compressed_size = deflated.byteLength;
                         }
                             break;
                         default:
                             console.error(`Unsupported compresssion schema: ${options.data.compression}`);
-                            break;    
-                    }           
+                            break;
+                    }
                 }catch(error: any){
                     console.error(error);
                 }
@@ -322,7 +339,6 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                     beginOptions.compressed_checksum = get_checksum('md5', deflated);
                 }
             }
-           
 
         }catch(error: any){
             if(!axios.isCancel(error)) {
@@ -331,7 +347,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             }
             return;
         }
-                
+
         try{
             console.log("beginning OTA update with the following options:", beginOptions);
 
@@ -425,7 +441,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
                     vscode.window.showErrorMessage(`Error while ending OTA update: ${endOK.data.error}`);
                 }else{
                     vscode.window.showErrorMessage('Error while ending OTA update: bad image or checksum?');
-                }                
+                }
                 return;
             }
         }catch(error){
@@ -435,7 +451,7 @@ async function uploadFirmware(context: vscode.ExtensionContext): Promise<void>{
             }
             return;
         }
-        
+
         // reboot the device so the firmware applies
         try{
             progress.report({ message: 'Rebooting Device ...' });
@@ -473,15 +489,15 @@ async function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
 
     // register command for device switch
     const switchDeviceCommand = 'thinger-io.switchDevice';
-    context.subscriptions.push(vscode.commands.registerCommand(switchDeviceCommand, async () => 
-    {   
+    context.subscriptions.push(vscode.commands.registerCommand(switchDeviceCommand, async () =>
+    {
         await selectDevice(context);
     }));
 
     // register command for device clear
     const clearDeviceCommand = 'thinger-io.clearDevice';
-    context.subscriptions.push(vscode.commands.registerCommand(clearDeviceCommand, async () => 
-    {   
+    context.subscriptions.push(vscode.commands.registerCommand(clearDeviceCommand, async () =>
+    {
          await context.workspaceState.update('device', undefined);
          selectDeviceBarItem.text = `$(rocket)`;
          initStateListener(context, selectDeviceBarItem);
@@ -494,10 +510,10 @@ async function createSwitchDeviceBarItem(context: vscode.ExtensionContext)
     selectDeviceBarItem.command = switchDeviceCommand;
     context.subscriptions.push(selectDeviceBarItem);
     selectDeviceBarItem.show();
-    
+
     // initiate device stat listener
     await initStateListener(context, selectDeviceBarItem);
-    
+
     // re-init state listener if configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('thinger-io')) {
@@ -510,7 +526,7 @@ function createUploadFirmwareBarItem(context: vscode.ExtensionContext)
 {
     const upload = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
     const flashCommand = 'thinger-io.uploadFirmware';
-    context.subscriptions.push(vscode.commands.registerCommand(flashCommand, async () => 
+    context.subscriptions.push(vscode.commands.registerCommand(flashCommand, async () =>
     {
         try{
             upload.text = `$(sync~spin) Uploading...`;
@@ -537,11 +553,12 @@ let evtSource : any;
 async function initStateListener(context: vscode.ExtensionContext, item : vscode.StatusBarItem){
     const host = vscode.workspace.getConfiguration('thinger-io').get('host');
     const port = vscode.workspace.getConfiguration('thinger-io').get('port');
+    const ssl = vscode.workspace.getConfiguration('thinger-io').get('ssl');
     const secure = vscode.workspace.getConfiguration('thinger-io').get('secure');
     const device = context.workspaceState.get<string>('device');
     const token = await getToken();
     const user = await getUser();
-    
+
     // change color according to connection status
     function setConnected(connected : boolean): void{
         console.log("SSE - Connected:", connected);
@@ -561,15 +578,17 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
 
     // initialize event source 
     if(evtSource) evtSource.close();
-    let url = `https://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
-    let config = {
-        https: {
-            rejectUnauthorized: secure
-        },
+    let url = `${ ssl ? ' https' : 'http' }://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
+
+    let config : any = {};
+    config = {
         headers: {
             Authorization: `Bearer ${token}`
         }
     };
+    if ( ssl ) {
+        config["https"] = { rejectUnauthorized: secure};
+    }
     evtSource = new EventSource(url, config);
     evtSource.reconnectInterval = 5000;
 
@@ -588,7 +607,7 @@ async function initStateListener(context: vscode.ExtensionContext, item : vscode
             setConnected(data.connected);
         }
     };
-    
+
     evtSource.addEventListener("connect", function (e : any) {
         console.log("SSE - Connect", e.data);
     });
@@ -601,12 +620,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // TODO, wor on Output channel for relevant logging?
     //let thingerLog = vscode.window.createOutputChannel("Thinger.io");
-    
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Thinger.io plugin activated');
+
+    // Use the console to output diagnostic information (console.log) and errors (console.error)
+    // This line of code will only be executed once when your extension is activated
+    console.info('Thinger.io plugin activated');
     await createSwitchDeviceBarItem(context);
-	createUploadFirmwareBarItem(context);    
+    createUploadFirmwareBarItem(context);
 }
 
 // this method is called when your extension is deactivated

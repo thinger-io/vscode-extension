@@ -4,7 +4,7 @@
 	"displayName": "Thinger.io",
 	"description": "Thinger.io integration for OTA updates.",
 	"license": "MIT",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"engines": {
 		"vscode": "^1.54.0"
 	},
@@ -22,7 +22,7 @@
 		"esp32",
 		"esp8266"
 	],
-	"icon": "resources/thinger-logo.png",
+	"icon": "resources/io_icon.png",
 	"homepage": "https://thinger.io",
 	"author": {
 		"name": "Thinger.io"
@@ -68,6 +68,11 @@
 					"type": "number",
 					"default": 443,
 					"description": "Specifies the default port"
+				},
+				"thinger-io.ssl": {
+					"type": "boolean",
+					"default": true,
+					"description": "Use SSL/TLS encryption (recommended)"
 				},
 				"thinger-io.secure": {
 					"type": "boolean",

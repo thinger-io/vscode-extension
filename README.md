@@ -38,5 +38,6 @@ This extension contributes the following settings:
 
 * `thinger-io.host`: Thinger.io instance host. Defaults to community instances.
 * `thinger-io.port`: Thinger.io instance port. Defaults to 443.
+* `thinger-io.ssl` : Use SSL/TLS encryption. Default to true.
 * `thinger-io.secure`: Verify SSL/TLS connection. Defaults to true.
 * `thinger-io.token`: Thinger.io instance token for access devices.
