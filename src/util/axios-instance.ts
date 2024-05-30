@@ -3,16 +3,16 @@ import * as vscode from 'vscode';
 const Agent = require('agentkeepalive');
 const HttpsAgent = require('agentkeepalive').HttpsAgent;
 
-export const getInstance = function(){
+export const getInstance = function () {
 
-  const version = vscode.extensions.getExtension('thinger-io.thinger-io')?.packageJSON.version
+  const version = vscode.extensions.getExtension('thinger-io.thinger-io')?.packageJSON.version;
 
   let axiosInstance = axios.create({
 
     // set user agent and keep-alive
     headers: {
-      'User-Agent' : `vscode/${vscode.version} thinger/${version}`,
-      'Connection' : 'keep-alive'
+      'User-Agent': `vscode/${vscode.version} thinger/${version}`,
+      'Connection': 'keep-alive'
     },
 
     //60 sec timeout
@@ -48,15 +48,15 @@ export const getInstance = function(){
     config.headers.Authorization = `Bearer ${token}`;
 
     // debug request
-    console.log('Thinger.io Request: ', config)
+    console.log('Thinger.io Request: ', config);
     return config;
   });
 
   axiosInstance.interceptors.response.use((response: any) => {
-    console.log('Thinger.io Response:', response)
+    console.log('Thinger.io Response:', response);
     return response;
   });
 
   return axiosInstance;
-  
-}
+
+};
