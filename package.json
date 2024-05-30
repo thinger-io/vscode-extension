@@ -41,13 +41,13 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "thinger-io.switchDevice",
-				"title": "Switch Target Device",
+				"command": "thinger-io.switchTarget",
+				"title": "Switch Target Destination",
 				"category": "Thinger.io"
 			},
 			{
-				"command": "thinger-io.clearDevice",
-				"title": "Clear Target Device",
+				"command": "thinger-io.clearTarget",
+				"title": "Clear Target Destination",
 				"category": "Thinger.io"
 			},
 			{
