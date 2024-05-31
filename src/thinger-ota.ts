@@ -4,7 +4,7 @@ import { ThingerOTATarget, ThingerConfig } from './thinger-config';
 import { ThingerAPI } from './thinger-api';
 import axios from 'axios';
 import { otaReport } from './thinger-ota-report';
-import { OTAResult, ThingerOTAInstance } from './thinger-ota-instance';
+import { OTAResult, OTAUpdateResult, ThingerFirmware, ThingerOTAInstance } from './thinger-ota-instance';
 import { pio } from './util/platformio';
 
 export class ThingerOTA {
@@ -18,7 +18,7 @@ export class ThingerOTA {
         this.api = new ThingerAPI(this.config);
     }
 
-    private async uploadToProduct(target: ThingerOTATarget, file: Uint8Array, environment: string): Promise<OTAResult[]> {
+    private async uploadToProduct(target: ThingerOTATarget, firmware: ThingerFirmware, environment: string): Promise<OTAResult[]> {
         // start a progress window for the upload
         return vscode.window.withProgress({
             cancellable: true,
@@ -34,12 +34,12 @@ export class ThingerOTA {
                 cancelled = true;
             });
 
-            otaReport.initReport(target);
+            otaReport.initReport(target, firmware);
 
             const results: OTAResult[] = [];
 
             try {
-                const otaInstance = new ThingerOTAInstance(this.api, file, environment);
+                const otaInstance = new ThingerOTAInstance(this.api, firmware, environment);
                 const response = await this.api.getProductDevices(target.id, cancelTokenSource.token);
                 const devices = response?.data;
 
@@ -57,7 +57,7 @@ export class ThingerOTA {
                     const device = devices[i].device;
 
                     if (cancelled) {
-                        results.push({ device: device, result: false, description: 'Operation cancelled' });
+                        results.push({ device: device, result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' });
                     } else {
                         const result = await otaInstance.upload(device);
                         results.push(result);
@@ -85,22 +85,22 @@ export class ThingerOTA {
         });
     }
 
-    private async uploadToDevice(target: ThingerOTATarget, file: Uint8Array, environment: string): Promise<OTAResult> {
-        otaReport.initReport(target);
-        const result = await new ThingerOTAInstance(this.api, file, environment).upload(target.id);
+    private async uploadToDevice(target: ThingerOTATarget, firmware: ThingerFirmware, environment: string): Promise<OTAResult> {
+        otaReport.initReport(target, firmware);
+        const result = await new ThingerOTAInstance(this.api, firmware, environment).upload(target.id);
         otaReport.logResult(result);
         otaReport.endReport();
         return result;
     }
 
-    private async uploadTarget(user: string, target: ThingerOTATarget, file: Uint8Array, environment: string) : Promise<OTAResult | OTAResult[]>{
+    private async uploadTarget(user: string, target: ThingerOTATarget, firmware: ThingerFirmware, environment: string) : Promise<OTAResult | OTAResult[]>{
         if (target.type === 'device') {
-            return this.uploadToDevice(target, file, environment);
+            return this.uploadToDevice(target, firmware, environment);
         } else if (target.type === 'product') {
-            return this.uploadToProduct(target, file, environment);
+            return this.uploadToProduct(target, firmware, environment);
         } else {
             vscode.window.showErrorMessage('Target type not supported!');
-            return { result: false, description: 'Target type not supported!' };
+            return { result: OTAUpdateResult.FAILURE, description: 'Target type not supported!' };
         }
     }
 
@@ -113,17 +113,20 @@ export class ThingerOTA {
         const firmware = await pio.getFirmware();
         if (!firmware) {return;}
 
-        // read firmware file
-        let file : Uint8Array;
-        try{
-            file = await vscode.workspace.fs.readFile(firmware.path);
-        }catch(e: any){
-            vscode.window.showErrorMessage('Error while reading firmware file: ' + e);
-            return;
+        // Show a confirmation dialog with firmware information
+        const firmwareInfo = `${target.type==='device' ? 'Device' : 'Product'}: ${target.id}\nFirmware Version: ${firmware.version ?? 'Unknown'}\nEnvironment: ${firmware.environment}\n\nFirmware Path: ${firmware.path.fsPath}`;
+        const confirmation = await vscode.window.showInformationMessage(
+            `Do you want to upload the following firmware?`,
+            { modal: true, detail: firmwareInfo},
+            'Yes'
+        );
+
+        if (confirmation !== 'Yes') {
+            return; // User cancelled the update
         }
 
         // upload firmware to target
-        return this.uploadTarget(user, target, file, firmware.environment);
+        return this.uploadTarget(user, target, firmware, firmware.environment);
     }
 
 }
