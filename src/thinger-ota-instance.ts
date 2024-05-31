@@ -4,9 +4,15 @@ import axios from 'axios';
 import { LZSS } from './util/lzss';
 import { otaReport } from './thinger-ota-report';
 
+export enum OTAUpdateResult {
+    SUCCESS = 'SUCCESS',
+    FAILURE = 'FAILURE',
+    ALREADY_UPDATED = 'ALREADY_UPDATED'
+}
+
 export interface OTAResult {
     device?: string;
-    result: boolean;
+    result: OTAUpdateResult;
     description: string;
     duration?: number;
 }
@@ -22,12 +28,19 @@ export interface OTAOptions{
     compressed_checksum?: string;
 }
 
+export interface ThingerFirmware{
+    path: vscode.Uri;
+    environment: string;
+    version: string | null;
+}
+
 export class ThingerOTAInstance {
 
     private api: ThingerAPI;
     private cancelTokenSource = axios.CancelToken.source();
 
-    private file: Uint8Array;
+    private firmware: ThingerFirmware;
+    private file!: Uint8Array;
     private deflated: Uint8Array | undefined;
     private compression: string | undefined;
     private environment: string;
@@ -38,9 +51,9 @@ export class ThingerOTAInstance {
     private cancelled: boolean = false;
     private sent: number = 0;
 
-    constructor(api: ThingerAPI, file: Uint8Array, environment: string = 'default') {
+    constructor(api: ThingerAPI, firmware: ThingerFirmware, environment: string = 'default') {
         this.api = api;
-        this.file = file;
+        this.firmware = firmware;
         this.environment = environment;
     }
 
@@ -53,7 +66,7 @@ export class ThingerOTAInstance {
         }
     }
 
-    private async initializeOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>){        
+    private async initializeOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) : Promise<OTAResult> {        
         // report progress
         progress.report({
             message: 'Initializing OTA Update ...',
@@ -79,10 +92,15 @@ export class ThingerOTAInstance {
 
             console.log('Got device OTA options:', options.data);
 
+            if(options.data.version===this.firmware.version){
+                this.showDeviceInfo(device, `Firmware version is already up-to-date!`);
+                return { result: OTAUpdateResult.ALREADY_UPDATED, description: 'Firmware version is already up-to-date' };
+            }
+
             // check OTA is enabled for the device
             if (!options.data.enabled) {
-                vscode.window.showErrorMessage('OTA Updates are disabled on this device!');
-                return { result: false, description: 'OTA Disabled' };
+                this.showDeviceError(device, 'Device has OTA disabled!');
+                return { result: OTAUpdateResult.FAILURE, description: 'OTA Disabled' };
             }
 
             // adjust chunk size based on device settings
@@ -140,24 +158,32 @@ export class ThingerOTAInstance {
         } catch (error: any) {
             if (!axios.isCancel(error)) {
                 if (error.response.status === 403) {
-                    vscode.window.showErrorMessage('Cannot retrieve device OTA options. Please check your Token permissions.');
-                    return { result: false, description: 'Cannot retrieve device OTA options.' };
+                    this.showDeviceError(device, 'Cannot retrieve device OTA options.');
+                    return { result: OTAUpdateResult.FAILURE, description: 'Cannot retrieve device OTA options.' };
                 } else if (error.response.status === 404) {
-                    vscode.window.showErrorMessage(`Device '${device}' is not connected or does not support OTA!`);
-                    return { result: false, description: 'Disconnected or not supporting OTA' };
+                    this.showDeviceError(device, 'Not connected or does not support OTA.');
+                    return { result: OTAUpdateResult.FAILURE, description: 'Disconnected or not supporting OTA' };
                 } else {
-                    vscode.window.showErrorMessage('Cannot initialize OTA: ' + error);
-                    return { result: false, description: `Cannot initialize OTA: ${error}` };
+                    this.showDeviceError(device, 'Cannot initialize OTA: ' + error);
+                    return { result: OTAUpdateResult.FAILURE, description: `Cannot initialize OTA: ${error}` };
                 }
             } else {
-                return { result: false, description: 'Operation cancelled' };
+                return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
             }
         }
 
-        return { result: true, description: 'OK' };
+        return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
     }
 
-    private async beginOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) {
+    private showDeviceInfo(device: string, message: string){
+        vscode.window.showInformationMessage(`Device ${device}: ${message}`);
+    }
+
+    private showDeviceError(device: string, message: string){
+        vscode.window.showErrorMessage(`Device ${device}: ${message}`);
+    }
+
+    private async beginOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) : Promise<OTAResult> {
         try {
             console.log("Beginning OTA update with the following options:", this.otaOptions);
 
@@ -167,26 +193,26 @@ export class ThingerOTAInstance {
             // ensure the device OTA begin is OK! 
             if (beginOK.data.success !== true) {
                 if (beginOK.data.error) {
-                    vscode.window.showErrorMessage(`Error while initializing OTA: ${beginOK.data.error}`);
-                    return { result: false, description: `Error while initializing OTA: ${beginOK.data.error}` };
+                    this.showDeviceError(device, `Error while initializing OTA: ${beginOK.data.error}`);
+                    return { result: OTAUpdateResult.FAILURE, description: `Error while initializing OTA: ${beginOK.data.error}` };
                 } else {
-                    vscode.window.showErrorMessage('Device cannot initialize OTA!');
-                    return { result: false, description: 'Device cannot initialize OTA!' };
+                    this.showDeviceError(device, 'Error while initializing OTA!');
+                    return { result: OTAUpdateResult.FAILURE, description: 'Device cannot initialize OTA!' };
                 }
             }
         } catch (error: any) {
             if (!axios.isCancel(error)) {
                 console.error(error);
-                return { result: false, description: `Cannot begin OTA Upgrade: ${error}` };
+                return { result: OTAUpdateResult.FAILURE, description: `Cannot begin OTA Upgrade: ${error}` };
             } else {
-                return { result: false, description: 'Operation cancelled' };
+                return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
             }
         }
 
-        return { result: true, description: 'OK' };
+        return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
     }
 
-    private async writeOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) {            
+    private async writeOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) : Promise<OTAResult>{            
         // determine final binary size and number of chunks to send
         const otaFirmware = this.deflated && this.deflated.byteLength > 0 ? this.deflated : this.file;
         const otaSize = otaFirmware.byteLength;
@@ -208,21 +234,21 @@ export class ThingerOTAInstance {
                 if (!writeChunk.data.success) {
                     console.error(writeChunk.data);
                     if (writeChunk.data.error) {
-                        vscode.window.showErrorMessage(`Error while writing to device: ${writeChunk.data.error}`);
-                        return { result: false, description: `Error while writing to device: ${writeChunk.data.error}` };
+                        this.showDeviceError(device, `Error while writing to device: ${writeChunk.data.error}`);
+                        return { result: OTAUpdateResult.FAILURE, description: `Error while writing to device: ${writeChunk.data.error}` };
                     } else {
-                        vscode.window.showErrorMessage('Error while writing to device: invalid firmware part?');
-                        return { result: false, description: 'Error while writing to device: invalid firmware part?' };
+                        this.showDeviceError(device, 'Error while writing to device: invalid firmware part?');
+                        return { result: OTAUpdateResult.FAILURE, description: 'Error while writing to device: invalid firmware part?' };
                     }
                 }
 
             } catch (error) {
                 if (!axios.isCancel(error)) {
                     console.error(error);
-                    vscode.window.showErrorMessage('Error while writing to device: ' + error);
-                    return { result: false, description: `Error while writing to device: ${error}` };
+                    this.showDeviceError(device, 'Error while writing to device: ' + error);
+                    return { result: OTAUpdateResult.FAILURE, description: `Error while writing to device: ${error}` };
                 } else {
-                    return { result: false, description: 'Operation cancelled' };
+                    return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
                 }
             }
 
@@ -232,19 +258,20 @@ export class ThingerOTAInstance {
                 message: `Uploading Firmware (${this.environment})...`,
                 increment: (currentChunkSize / otaSize) * 100
             });
+            otaReport.logProgress(device, (this.sent / otaSize) * 100);
             console.log("Progress: ", (this.sent / otaSize) * 100);
         }
 
 
         // if loop ended due to cancelled state.. do nothing
         if (this.cancelled) {
-            return { result: false, description: 'Operation cancelled' };
+            return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
         }else{
-            return { result: true, description: 'OK' };
+            return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
         }
     }
 
-    private async endOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) {
+    private async endOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) : Promise<OTAResult> {
         // try to end OTA update after all chunks are sent
         try {
             progress.report({
@@ -256,22 +283,22 @@ export class ThingerOTAInstance {
             if (!endOK.data.success) {
                 if (endOK.data.error) {
                     const errorMsg = `Error while ending OTA update: ${endOK.data.error}`;
-                    vscode.window.showErrorMessage(errorMsg);
-                    return { result: false, description: errorMsg };
+                    this.showDeviceError(device, errorMsg);
+                    return { result: OTAUpdateResult.FAILURE, description: errorMsg };
                 } else {
                     const errorMsg = 'Error while ending OTA update: bad image or checksum?';
-                    vscode.window.showErrorMessage(errorMsg);
-                    return { result: false, description: errorMsg };
+                    this.showDeviceError(device, errorMsg);
+                    return { result: OTAUpdateResult.FAILURE, description: errorMsg };
                 }
             }
         } catch (error) {
             if (!axios.isCancel(error)) {
                 console.error(error);
                 const errorMsg = 'Error while ending OTA update: ' + error;
-                vscode.window.showErrorMessage(errorMsg);
-                return { result: false, description: errorMsg };
+                this.showDeviceError(device, errorMsg);
+                return { result: OTAUpdateResult.FAILURE, description: errorMsg };
             } else {
-                return { result: false, description: 'Operation cancelled' };
+                return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
             }
         }
 
@@ -279,13 +306,13 @@ export class ThingerOTAInstance {
         try {
             progress.report({ message: 'Rebooting Device ...' });
             const restart = await this.api.rebootDeviceOTA(device, this.cancelTokenSource.token);
-            vscode.window.showInformationMessage(`OTA Completed for device: ${device}`);
-            return { result: true, description: 'OK' };
+            this.showDeviceInfo(device, 'OTA Completed! Device is rebooting...');
+            return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
         } catch (error) {
             console.error(error);
             const errorMsg = 'Error while rebooting device: ' + error;
-            vscode.window.showErrorMessage(errorMsg);
-            return { result: false, description: errorMsg };
+            this.showDeviceError(device, errorMsg);
+            return { result: OTAUpdateResult.FAILURE, description: errorMsg };
         }
     }
 
@@ -298,6 +325,15 @@ export class ThingerOTAInstance {
     }
 
     public async upload(device: string): Promise<OTAResult> {
+
+        // read firmware file
+        try{
+            this.file = await vscode.workspace.fs.readFile(this.firmware.path);
+        }catch(e: any){
+            vscode.window.showErrorMessage('Error while reading firmware file: ' + e);
+            return this.returnResult(device, { result: OTAUpdateResult.FAILURE, description: 'Error while reading firmware file' });
+        }
+
         // start a progress window for the upload
         return vscode.window.withProgress({
             cancellable: true,
@@ -314,28 +350,28 @@ export class ThingerOTAInstance {
             if(!this.cancelled){  
                  // initialize the OTA process
                 const result = await this.initializeOTA(device, progress);
-                if(!result.result) {return this.returnResult(device, result);}
+                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
             }
 
             if(!this.cancelled){  
                 // begin the OTA process
                 const result = await this.beginOTA(device, progress);
-                if(!result.result) {return this.returnResult(device, result);}
+                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
             }
 
             if(!this.cancelled){  
                 // write the OTA 
                 const result = await this.writeOTA(device, progress);
-                if(!result.result) {return this.returnResult(device, result);}
+                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
             }
 
             if(!this.cancelled){  
                 // end the OTA 
                 const result = await this.endOTA(device, progress);
-                return this.returnResult(device, result);;
+                return this.returnResult(device, result);
             }
             
-            return { result: false, description: 'Operation cancelled' };
+            return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
         });
     }
 }
