@@ -4,7 +4,7 @@
 	"displayName": "Thinger.io",
 	"description": "Thinger.io integration for OTA updates.",
 	"license": "MIT",
-	"version": "1.0.6",
+	"version": "1.1.0",
 	"engines": {
 		"vscode": "^1.54.0"
 	},
@@ -14,13 +14,20 @@
 		"Other"
 	],
 	"keywords": [
-		"embedded",
-		"debug",
-		"c",
-		"c++",
-		"microcontroller",
+		"iot",
+		"ota",
+		"update",
+		"espressif",
 		"esp32",
-		"esp8266"
+		"esp8266",
+		"arduino",
+		"portenta",
+		"opta",
+		"nano",
+		"RPI2040",
+		"wifi",
+		"ethernet",
+		"nb"
 	],
 	"icon": "resources/io_icon.png",
 	"homepage": "https://thinger.io",
