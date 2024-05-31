@@ -72,6 +72,7 @@ export class ThingerOTAGUI {
         this.context.subscriptions.push(vscode.commands.registerCommand(switchTargetCommand, async () => {
             const target = await this.selectTarget();
             this.updateTargetBarItem(target);
+            this.updateUploadStatusBar(false);
         }));
 
         // register command for target clear
@@ -99,12 +100,11 @@ export class ThingerOTAGUI {
         
         // configure switch device button
         this.context.subscriptions.push(this.switchTargetBarItem);
-        
     }
-
+    
     private updateUploadStatusBar(uploading: boolean) {
         if (uploading) {
-            this.uploadTargetBarItem.text = `$(sync~spin) Uploading...`;
+            this.uploadTargetBarItem.text = `$(loading~spin) Uploading...`;
             this.uploadTargetBarItem.tooltip = `Thinger.io: Uploading Firmware`;
             this.uploadTargetBarItem.command = undefined;
         } else {
@@ -144,6 +144,7 @@ export class ThingerOTAGUI {
     private async initStateListener(item: vscode.StatusBarItem) {
         const host = vscode.workspace.getConfiguration('thinger-io').get('host');
         const port = vscode.workspace.getConfiguration('thinger-io').get('port');
+        const ssl = vscode.workspace.getConfiguration('thinger-io').get('ssl');
         const secure = vscode.workspace.getConfiguration('thinger-io').get('secure');
         const target = this.context.workspaceState.get<ThingerOTATarget>('target');
 
@@ -174,15 +175,18 @@ export class ThingerOTAGUI {
 
         // initialize event source 
         this.evtSource?.close();
-        let url = `https://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
-        let config = {
-            https: {
-                rejectUnauthorized: secure
-            },
+        let url = `${ ssl ? ' https' : 'http' }://${host}:${port}/v1/users/${user}/devices/${device}/stats`;
+        
+        let config : any = {};
+        config = {
             headers: {
                 Authorization: `Bearer ${token}`
             }
         };
+        if ( ssl ) {
+            config["https"] = { rejectUnauthorized: secure};
+        }
+        
         this.evtSource = new eventSource(url, config);
         this.evtSource.reconnectInterval = 5000;
 
