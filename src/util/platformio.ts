@@ -1,16 +1,18 @@
 import * as vscode from 'vscode';
 import path = require('path');
+import * as fs from 'fs';
 
-export interface PlatformioFirmware{
+export interface ThingerFirmware{
     path: vscode.Uri;
     environment: string;
+    version: string | null;
 }
 
 export class Platformio{
 
     private async executeBuildTask(task: vscode.Task) {
         const execution = await vscode.tasks.executeTask(task);
-    
+
         return new Promise<number | undefined>(resolve => {
             let disposable = vscode.tasks.onDidEndTaskProcess(e => {
                 if (e.execution === execution) {
@@ -27,10 +29,23 @@ export class Platformio{
                 
                 try{
                     let platformio = vscode.extensions.getExtension('platformio.platformio-ide');
-                    let projects = platformio?.exports.context.globalState.get('projects');
-                    let lastProjectDir = projects?.lastProjectDir;
-                    let activeEnv = lastProjectDir ? projects.projects[lastProjectDir].activeEnv : null;
-        
+
+                    let globalState = platformio?.exports.context.globalState;    
+                    let majorVersion = parseInt(globalState.get('showedReleaseNotesFor')[0]);
+    
+                    let projects, lastProjectDir, activeEnv;
+                    if ( majorVersion >= 3 ) {
+                        console.info("Platformio version is >= 3");
+                        projects = globalState.get('projects');
+                        lastProjectDir = globalState.get('lastProjectDir');
+                        activeEnv = projects[lastProjectDir].selectedEnv;
+                    } else {
+                        console.info("Platformio version is < 3");
+                        projects = globalState.get('projects');
+                        lastProjectDir = projects.lastProjectDir;
+                        activeEnv = projects.projects[lastProjectDir].activeEnv;
+                    }
+
                     for(let i=0; i<tasks.length; i++){
                         const task = tasks[i];
                         if(task.source==='PlatformIO'){
@@ -50,7 +65,34 @@ export class Platformio{
         });
     }
 
-    public async getFirmware(compile : boolean = true) : Promise<PlatformioFirmware |undefined>{
+    // Function to extract the version from the binary file
+    private extractVersionFromFirmware(firmwarePath: string): string | null {
+        // Read the binary file
+        const firmwareBuffer = fs.readFileSync(firmwarePath);
+        
+        // Convert the buffer to a string
+        const firmwareString = firmwareBuffer.toString('binary');
+        
+        // Extract human-readable strings from the binary content
+        const strings = firmwareString.match(/[\x20-\x7E]{4,}/g);
+        
+        if (strings) {
+            // Define the unique marker for the version string
+            const versionMarker = "@(#)";
+            
+            // Search for the marker and extract the version string
+            for (const str of strings) {
+                if (str.startsWith(versionMarker)) {
+                    return str.substring(versionMarker.length);
+                }
+            }
+        }
+        
+        console.error('No readable strings found in firmware');
+        return null;
+    }
+
+    public async getFirmware(compile : boolean = true) : Promise<ThingerFirmware |undefined>{
         // default wildcard search inside of .pio/build
         let searchPath = "**";
 
@@ -70,6 +112,7 @@ export class Platformio{
                         searchPath = buildTasks[1];
                     }
                 } else {
+                    // stop upload when build task is not found
                     vscode.window.showWarningMessage('Platformio Build Task cannot be found!');
                     return;
                 }
@@ -105,10 +148,17 @@ export class Platformio{
         // if no environment is available, then return
         if (!environment) {return;}
 
+        const firmwareFile = envs[environment].path;
+        if (!firmwareFile) {return;}
+
+        // extract version from firmware
+        const version = this.extractVersionFromFirmware(firmwareFile.fsPath);
+
         // get firmware file path
         return {
             path: envs[environment].path,
-            environment: environment
+            environment: environment,
+            version: version
         };
     }
     
