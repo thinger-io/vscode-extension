@@ -92,7 +92,7 @@ export class ThingerOTAInstance {
 
             console.log('Got device OTA options:', options.data);
 
-            if(options.data.version===this.firmware.version){
+            if(options.data.version && options.data.version===this.firmware.version){
                 this.showDeviceInfo(device, `Firmware version is already up-to-date!`);
                 return { result: OTAUpdateResult.ALREADY_UPDATED, description: 'Firmware version is already up-to-date' };
             }

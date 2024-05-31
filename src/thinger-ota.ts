@@ -114,7 +114,7 @@ export class ThingerOTA {
         if (!firmware) {return;}
 
         // Show a confirmation dialog with firmware information
-        const firmwareInfo = `${target.type==='device' ? 'Device' : 'Product'}: ${target.id}\nFirmware Version: ${firmware.version ?? 'Unknown'}\nEnvironment: ${firmware.environment}\n\nFirmware Path: ${firmware.path.fsPath}`;
+        const firmwareInfo = `${target.type==='device' ? 'Device' : 'Product'}: ${target.id}\nFirmware Version: ${firmware.version || 'Unknown'}\nEnvironment: ${firmware.environment}\n\nFirmware Path: ${firmware.path.fsPath}`;
         const confirmation = await vscode.window.showInformationMessage(
             `Do you want to upload the following firmware?`,
             { modal: true, detail: firmwareInfo},
