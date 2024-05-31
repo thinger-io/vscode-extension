@@ -36,7 +36,12 @@ export class ThingerOTATargetPicker {
 
 			let items: QuickPickItem[] = [];
 			response?.data.forEach((element: any) => {
-				items.push({ label: element[type], description: element.name, detail: element.description });
+				if(type==='device'){
+					const connected = element.connection?.active? '●' : '○';
+					items.push({ label: `${connected} ${element[type]}`, description: element.name, detail: element.description });
+				}else{
+					items.push({ label: element[type], description: element.name, detail: element.description });
+				}
 			});
 
 			input.items = items;
@@ -140,7 +145,12 @@ export class ThingerOTATargetPicker {
 				shouldResume: shouldResume,
 			});
 
-			resource.id = pick.label;
+			if(type==='device'){
+				// remove the connected status from the label
+				resource.id = pick.label.split(' ')[1];
+			}else{
+				resource.id = pick.label;
+			}
 		}
 
 		function shouldResume() {
