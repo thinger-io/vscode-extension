@@ -139,7 +139,9 @@ export class ThingerOTAInstance {
                             console.error(`Unsupported compresssion schema: ${options.data.compression}`);
                             break;
                     }
-                    otaReport.logCompressionResult(options.data.compression, this.file.byteLength, this.deflated?.byteLength ?? 0);
+                    if(this.otaOptions.compression){
+                        otaReport.logCompressionResult(options.data.compression, this.file.byteLength, this.deflated?.byteLength ?? 0);
+                    }
                 } catch (error: any) {
                     console.error(error);
                 }
