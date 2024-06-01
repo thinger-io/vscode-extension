@@ -82,8 +82,9 @@ export class Platformio{
             
             // Search for the marker and extract the version string
             for (const str of strings) {
-                if (str.startsWith(versionMarker)) {
-                    return str.substring(versionMarker.length);
+                const index = str.indexOf(versionMarker);
+                if(index !== -1){
+                    return str.substring(index + versionMarker.length);
                 }
             }
         }
