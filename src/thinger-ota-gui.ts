@@ -204,18 +204,18 @@ export class ThingerOTAGUI {
             let data = JSON.parse(event.data);
             console.log("SSE - Received message:", data);
 
+            if (data.hasOwnProperty('connected') && data.connected) {
+                this.txRxStatus.clear();
+                this.txRxStatus.show();
+                setConnected(data.connected);
+            }
+
             if (data.hasOwnProperty('tx_bytes')) {
                 this.txRxStatus.updateTxBytes(data.tx_bytes);
             }
 
             if (data.hasOwnProperty('rx_bytes')) {
                 this.txRxStatus.updateRxBytes(data.rx_bytes);
-            }
-
-            if (data.hasOwnProperty('connected')) {
-                this.txRxStatus.clear();
-                this.txRxStatus.show();
-                setConnected(data.connected);
             }
         };
 
