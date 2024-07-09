@@ -1,5 +1,9 @@
 # Release Notes
 
+## Version 1.1.1 (2024-07-09)
+
+- Fix exeption when uploading firmware under some circumstances. 
+
 ## Version 1.1.0 (2024-05-31)
 
 ### Bulk Updates
