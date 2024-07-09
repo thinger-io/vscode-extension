@@ -159,10 +159,10 @@ export class ThingerOTAInstance {
             }
         } catch (error: any) {
             if (!axios.isCancel(error)) {
-                if (error.response.status === 403) {
+                if (error?.response?.status === 403) {
                     this.showDeviceError(device, 'Cannot retrieve device OTA options.');
                     return { result: OTAUpdateResult.FAILURE, description: 'Cannot retrieve device OTA options.' };
-                } else if (error.response.status === 404) {
+                } else if (error?.response?.status === 404) {
                     this.showDeviceError(device, 'Not connected or does not support OTA.');
                     return { result: OTAUpdateResult.FAILURE, description: 'Disconnected or not supporting OTA' };
                 } else {
