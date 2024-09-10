@@ -1,5 +1,9 @@
 # Release Notes
 
+## Version 1.1.2 (2024-09-10)
+
+- Fix issue when batch updating devices with different settings on compressions (it may send compressed files to devices not supporting it).
+
 ## Version 1.1.1 (2024-07-09)
 
 - Fix exeption when uploading firmware under some circumstances. 
