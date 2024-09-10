@@ -143,8 +143,11 @@ export class ThingerOTAInstance {
                         otaReport.logCompressionResult(options.data.compression, this.file.byteLength, this.deflated?.byteLength ?? 0);
                     }
                 } catch (error: any) {
+                    this.deflated = undefined;
                     console.error(error);
                 }
+            }else{
+                this.deflated = undefined;
             }
 
             // generate checksumm from original file and compressed 
