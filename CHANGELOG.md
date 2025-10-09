@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 1.1.5 (2025-10-09)
+
+### Configuration Enhancements
+
+    Requires Arduino Library 2.41.0 or newer for timeout configuration support.
+
+- **Per-Device Timeout Support**: Added support for device-specific OTA timeouts. Devices can now report their preferred timeout value, which will be used automatically unless overridden in settings.
+- **Timeout Configuration Priority**: Timeout selection follows this priority: 1) User-configured override (`thinger-io.otaTimeout`), 2) Device-reported timeout, 3) Default 30s fallback.
+- **Timeout sent to Device**: The selected timeout is now communicated to the device during OTA initialization, allowing device-side operations to align with the configured timeout.
+
 ## Version 1.1.4 (2025-10-09)
 
 ### Configuration Enhancements
