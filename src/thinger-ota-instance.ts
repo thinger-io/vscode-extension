@@ -26,6 +26,7 @@ export interface OTAOptions{
     compression?: string;
     compressed_size?: number;
     compressed_checksum?: string;
+    timeout?: number;
 }
 
 export interface ThingerFirmware{
@@ -46,6 +47,7 @@ export class ThingerOTAInstance {
     private environment: string;
     private chunkSize: number = 8192;
     private otaOptions: OTAOptions = {};
+    private otaTimeoutMs: number = 0;
     private startTime: Date | undefined;
 
     private cancelled: boolean = false;
@@ -117,6 +119,30 @@ export class ThingerOTAInstance {
                 this.chunkSize = configuredBlockSize;
                 this.otaOptions.chunk_size = this.chunkSize;
             }
+
+            // determine timeout to use for OTA operations
+            const configuredTimeoutSeconds = vscode.workspace.getConfiguration('thinger-io').get<number>('otaTimeout') || 0;
+            const defaultTimeoutSeconds = 30; // default fallback timeout in seconds
+
+            // priority: 1) configured timeout, 2) device timeout, 3) default 30s
+            let timeoutSeconds = defaultTimeoutSeconds;
+            if (configuredTimeoutSeconds > 0) {
+                // user explicitly configured a timeout
+                console.log("Using configured timeout:", configuredTimeoutSeconds, "seconds");
+                timeoutSeconds = configuredTimeoutSeconds;
+            } else if (options.data.timeout && options.data.timeout > 0) {
+                // device provides timeout in milliseconds, convert to seconds
+                timeoutSeconds = options.data.timeout / 1000;
+                console.log("Using device timeout:", timeoutSeconds, "seconds (from", options.data.timeout, "ms)");
+            } else {
+                console.log("Using default timeout:", defaultTimeoutSeconds, "seconds");
+            }
+
+            // store timeout in milliseconds for HTTP requests
+            this.otaTimeoutMs = timeoutSeconds * 1000;
+
+            // add timeout to OTA options to send to device (in milliseconds)
+            this.otaOptions.timeout = this.otaTimeoutMs;
 
             // check if supports compressed firmware
             if (options.data.compression) {
@@ -204,7 +230,7 @@ export class ThingerOTAInstance {
             console.log("Beginning OTA update with the following options:", this.otaOptions);
 
             // notify the device we are going to begin the OTA process
-            const beginOK = await this.api.beginDeviceOTA(device, this.otaOptions, this.cancelTokenSource.token);
+            const beginOK = await this.api.beginDeviceOTA(device, this.otaOptions, this.cancelTokenSource.token, this.otaTimeoutMs);
 
             // ensure the device OTA begin is OK! 
             if (beginOK.data.success !== true) {
@@ -244,7 +270,7 @@ export class ThingerOTAInstance {
 
             // try to send chunk data to device
             try {
-                const writeChunk = await this.api.writeDeviceOTA(device, chunkData, this.cancelTokenSource.token);
+                const writeChunk = await this.api.writeDeviceOTA(device, chunkData, this.cancelTokenSource.token, this.otaTimeoutMs);
 
                 // check ota chunk has been processed correctly
                 if (!writeChunk.data.success) {
@@ -293,7 +319,7 @@ export class ThingerOTAInstance {
             progress.report({
                 message: 'Ending OTA Update ...'
             });
-            const endOK = await this.api.endDeviceOTA(device, this.cancelTokenSource.token);
+            const endOK = await this.api.endDeviceOTA(device, this.cancelTokenSource.token, this.otaTimeoutMs);
 
             // check ota chunk has been processed correctly
             if (!endOK.data.success) {
@@ -321,7 +347,7 @@ export class ThingerOTAInstance {
         // reboot the device so the firmware applies
         try {
             progress.report({ message: 'Rebooting Device ...' });
-            const restart = await this.api.rebootDeviceOTA(device, this.cancelTokenSource.token);
+            const restart = await this.api.rebootDeviceOTA(device, this.cancelTokenSource.token, this.otaTimeoutMs);
             this.showDeviceInfo(device, 'OTA Completed! Device is rebooting...');
             return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
         } catch (error) {

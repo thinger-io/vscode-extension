@@ -8,11 +8,18 @@ export class ThingerAPI {
         this.config = config;
     }
 
-    private async createConfig(cancelToken?: CancelToken): Promise<AxiosRequestConfig> {
-        return {
+    private async createConfig(cancelToken?: CancelToken, timeout?: number): Promise<AxiosRequestConfig> {
+        const config: AxiosRequestConfig = {
             cancelToken: cancelToken,
             ...this.axiosConfig,
         };
+
+        // if timeout is provided (in milliseconds), override the default
+        if (timeout !== undefined) {
+            config.timeout = timeout;
+        }
+
+        return config;
     }
 
     public async getDevices(search: String, cancelToken?: CancelToken) {
@@ -43,15 +50,15 @@ export class ThingerAPI {
         return this.axiosInstance.get(resource, config);
     }
 
-    public async beginDeviceOTA(device: string, options: any, cancelToken?: CancelToken) {
-        const config = await this.createConfig(cancelToken);
+    public async beginDeviceOTA(device: string, options: any, cancelToken?: CancelToken, timeout?: number) {
+        const config = await this.createConfig(cancelToken, timeout);
         const user = await this.config.getUser();
         const resource = `/v3/users/${user}/devices/${device}/resources/$ota/begin`;
         return this.axiosInstance.post(resource, options, config);
     }
 
-    public async writeDeviceOTA(device: string, data: any, cancelToken?: CancelToken) {
-        const config = await this.createConfig(cancelToken);
+    public async writeDeviceOTA(device: string, data: any, cancelToken?: CancelToken, timeout?: number) {
+        const config = await this.createConfig(cancelToken, timeout);
         const user = await this.config.getUser();
         const resource = `/v3/users/${user}/devices/${device}/resources/$ota/write`;
         return this.axiosInstance.post(resource, data, {
@@ -62,15 +69,15 @@ export class ThingerAPI {
         });
     }
 
-    public async endDeviceOTA(device: string, cancelToken?: CancelToken) {
-        const config = await this.createConfig(cancelToken);
+    public async endDeviceOTA(device: string, cancelToken?: CancelToken, timeout?: number) {
+        const config = await this.createConfig(cancelToken, timeout);
         const user = await this.config.getUser();
         const resource = `/v3/users/${user}/devices/${device}/resources/$ota/end`;
         return this.axiosInstance.post(resource, undefined, config);
     }
 
-    public async rebootDeviceOTA(device: string, cancelToken?: CancelToken) {
-        const config = await this.createConfig(cancelToken);
+    public async rebootDeviceOTA(device: string, cancelToken?: CancelToken, timeout?: number) {
+        const config = await this.createConfig(cancelToken, timeout);
         const user = await this.config.getUser();
         const resource = `/v3/users/${user}/devices/${device}/resources/$ota/reboot`;
         return this.axiosInstance.post(resource, undefined, config);

@@ -93,8 +93,8 @@
 				},
 				"thinger-io.otaTimeout": {
 					"type": "number",
-					"default": 120,
-					"description": "Timeout for OTA operations in seconds (useful for slow GSM/GPRS connections)"
+					"default": 0,
+					"description": "Override OTA timeout in seconds (0 = use device timeout, or 30s if not provided)"
 				},
 				"thinger-io.otaBlockSize": {
 					"type": "number",
