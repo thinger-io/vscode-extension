@@ -110,27 +110,38 @@ export class ThingerOTAInstance {
                 this.otaOptions.chunk_size = this.chunkSize;
             }
 
+            // check if there's a configured override for block size
+            const configuredBlockSize = vscode.workspace.getConfiguration('thinger-io').get<number>('otaBlockSize') || 0;
+            if (configuredBlockSize > 0) {
+                console.log("Overriding chunk size with configured value:", configuredBlockSize);
+                this.chunkSize = configuredBlockSize;
+                this.otaOptions.chunk_size = this.chunkSize;
+            }
+
             // check if supports compressed firmware
             if (options.data.compression) {
                 try {
                     switch (options.data.compression) {
                         case 'zlib': {
                             const zlib = require('zlib');
-                            this.deflated = zlib.deflateSync(this.file);
+                            const buffer = zlib.deflateSync(this.file);
+                            this.deflated = new Uint8Array(buffer);
                             this.otaOptions.compression = 'zlib';
                             this.otaOptions.compressed_size = this.deflated?.byteLength;
                         }
                             break;
                         case 'gzip': {
                             const zlib = require('zlib');
-                            this.deflated = zlib.gzipSync(this.file);
+                            const buffer = zlib.gzipSync(this.file);
+                            this.deflated = new Uint8Array(buffer);
                             this.otaOptions.compression = 'zlib';
                             this.otaOptions.compressed_size = this.deflated?.byteLength;
                         }
                             break;
                         case 'lzss': {
                             const lzss = new LZSS();
-                            this.deflated = lzss.encode(Buffer.from(this.file));
+                            const buffer = lzss.encode(Buffer.from(this.file));
+                            this.deflated = new Uint8Array(buffer);
                             this.otaOptions.compressed_size = this.deflated?.byteLength;
                             this.otaOptions.compression = 'lzss';
                         }

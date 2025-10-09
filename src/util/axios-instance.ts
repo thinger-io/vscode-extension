@@ -7,6 +7,11 @@ export const getInstance = function () {
 
   const version = vscode.extensions.getExtension('thinger-io.thinger-io')?.packageJSON.version;
 
+  // get OTA timeout from configuration (in seconds) and convert to milliseconds
+  const otaTimeoutSeconds = vscode.workspace.getConfiguration('thinger-io').get<number>('otaTimeout') || 120;
+  const timeoutMs = otaTimeoutSeconds * 1000;
+  console.log('Thinger.io OTA Timeout configured:', otaTimeoutSeconds, 'seconds (', timeoutMs, 'ms)');
+
   let axiosInstance = axios.create({
 
     // set user agent and keep-alive
@@ -15,8 +20,8 @@ export const getInstance = function () {
       'Connection': 'keep-alive'
     },
 
-    //60 sec timeout
-    timeout: 60000,
+    // configurable timeout (default 120 seconds)
+    timeout: timeoutMs,
 
     // configure https agent
     httpsAgent: new HttpsAgent({
