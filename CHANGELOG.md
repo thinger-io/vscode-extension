@@ -1,11 +1,19 @@
 # Release Notes
 
-## Version 1.1.3 (2025-10-09)
+## Version 1.1.4 (2025-10-09)
 
 ### Configuration Enhancements
 
 - **Configurable OTA Timeout**: Added `thinger-io.otaTimeout` configuration to set timeout for OTA operations in seconds (default: 120 seconds). This is especially useful for slow GSM/GPRS connections that may experience socket hang up errors with the previous 60-second timeout.
 - **OTA Block Size Override**: Added `thinger-io.otaBlockSize` configuration to override the device's default OTA block size in bytes (default: 0 = use device default). Useful for reducing packet size on slow or unreliable connections.
+
+### Bug Fixes
+
+- **Fixed Buffer to Uint8Array Conversion**: Fixed TypeScript type error in compression methods (zlib, gzip, lzss) that could cause runtime crashes during firmware compression.
+
+## Version 1.1.3 (2025-10-09)
+
+- Internal release (unpublished)
 
 ## Version 1.1.2 (2024-09-10)
 
