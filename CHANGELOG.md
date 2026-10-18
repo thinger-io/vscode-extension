@@ -1,5 +1,11 @@
 # Release Notes
 
+## Version 1.1.6 (2026-10-18)
+
+### Bug Fixes
+
+- **Fixed gzip compression label**: Gzip-compressed OTA images are now announced to the device as `gzip` instead of `zlib`. Devices that validate the compression label (e.g. Raspberry Pi Pico with Arduino Library 2.42.0 or newer) rejected these updates with "Unsupported compression". zlib and lzss compression are unchanged.
+
 ## Version 1.1.5 (2025-10-09)
 
 ### Configuration Enhancements
