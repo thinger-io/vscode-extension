@@ -160,7 +160,7 @@ export class ThingerOTAInstance {
                             const zlib = require('zlib');
                             const buffer = zlib.gzipSync(this.file);
                             this.deflated = new Uint8Array(buffer);
-                            this.otaOptions.compression = 'zlib';
+                            this.otaOptions.compression = 'gzip';
                             this.otaOptions.compressed_size = this.deflated?.byteLength;
                         }
                             break;
