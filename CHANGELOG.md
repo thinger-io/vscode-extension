@@ -1,5 +1,11 @@
 # Release Notes
 
+## Version 1.1.7 (2026-10-18)
+
+### Documentation
+
+- **Updated README**: Supported boards table aligned with Thinger.io Arduino Library 2.42.0 (new ESP32 variants, Raspberry Pi Pico W / Pico 2 W, Opta, UNO R4 WiFi, Thinger NB-IoT Core) with the compression used by each board, and documentation for the `thinger-io.otaTimeout` and `thinger-io.otaBlockSize` settings.
+
 ## Version 1.1.6 (2026-10-18)
 
 ### Bug Fixes
