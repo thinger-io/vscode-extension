@@ -59,7 +59,7 @@ export class ThingerOTA {
                     if (cancelled) {
                         results.push({ device: device, result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' });
                     } else {
-                        const result = await otaInstance.upload(device);
+                        const result = await otaInstance.upload(device, cancelToken);
                         results.push(result);
                     }
 

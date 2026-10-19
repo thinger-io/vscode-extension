@@ -3,6 +3,9 @@ import { ThingerAPI } from './thinger-api';
 import axios from 'axios';
 import { LZSS } from './util/lzss';
 import { otaReport } from './thinger-ota-report';
+import { ThingerFirmware } from './util/platformio';
+import { confirmOTACheck, OTACheckDecision, OTACheckMetadata, validateOTACheck } from './util/ota-check';
+export { ThingerFirmware } from './util/platformio';
 
 export enum OTAUpdateResult {
     SUCCESS = 'SUCCESS',
@@ -27,12 +30,6 @@ export interface OTAOptions{
     compressed_size?: number;
     compressed_checksum?: string;
     timeout?: number;
-}
-
-export interface ThingerFirmware{
-    path: vscode.Uri;
-    environment: string;
-    version: string | null;
 }
 
 export class ThingerOTAInstance {
@@ -74,16 +71,10 @@ export class ThingerOTAInstance {
             message: 'Initializing OTA Update ...',
         });
 
-        // reset internal state
-        this.sent = 0;
-        this.chunkSize = 8192;
-        this.cancelled = false;
-        this.startTime = new Date();
-
         // initialize basic begin options
         this.otaOptions = {
             firmware: this.environment,
-            version: '',
+            version: this.firmware.version || '',
             size: this.file.byteLength,
             chunk_size: this.chunkSize
         };
@@ -93,11 +84,6 @@ export class ThingerOTAInstance {
             const options = await this.api.getDeviceOTAOptions(device, this.cancelTokenSource.token);
 
             console.log('Got device OTA options:', options.data);
-
-            if(options.data.version && options.data.version===this.firmware.version){
-                this.showDeviceInfo(device, `Firmware version is already up-to-date!`);
-                return { result: OTAUpdateResult.ALREADY_UPDATED, description: 'Firmware version is already up-to-date' };
-            }
 
             // check OTA is enabled for the device
             if (!options.data.enabled) {
@@ -143,6 +129,17 @@ export class ThingerOTAInstance {
 
             // add timeout to OTA options to send to device (in milliseconds)
             this.otaOptions.timeout = this.otaTimeoutMs;
+
+            const compatibility = await this.checkCompatibility(device, options.data.check === true);
+            this.cancelTokenSource.token.throwIfRequested();
+            if (!compatibility.proceed) {
+                return { result: OTAUpdateResult.FAILURE, description: 'OTA cancelled by compatibility check' };
+            }
+            // An equal version does not imply equal hardware compatibility.
+            if (compatibility.matches && options.data.version && options.data.version === this.firmware.version) {
+                this.showDeviceInfo(device, 'Firmware version is already up-to-date!');
+                return { result: OTAUpdateResult.ALREADY_UPDATED, description: 'Firmware version is already up-to-date' };
+            }
 
             // check if supports compressed firmware
             if (options.data.compression) {
@@ -215,6 +212,31 @@ export class ThingerOTAInstance {
         }
 
         return { result: OTAUpdateResult.SUCCESS, description: 'OK' };
+    }
+
+    private async checkCompatibility(device: string, advertised: boolean): Promise<OTACheckDecision> {
+        let current: OTACheckMetadata | null = null;
+        try {
+            const response = await this.api.getDeviceOTACheck(device, this.cancelTokenSource.token, this.otaTimeoutMs);
+            current = validateOTACheck(response.data);
+        } catch (error: any) {
+            // Only an unadvertised, missing resource is a legacy device. Network,
+            // permission and malformed-data errors must never bypass the check.
+            if (axios.isCancel(error)) { throw error; }
+            if (error?.response?.status !== 404 || advertised) {
+                throw new Error(`Cannot verify device OTA compatibility: ${error.message}`);
+            }
+        }
+        this.cancelTokenSource.token.throwIfRequested();
+        return confirmOTACheck(device, current, this.firmware.check, async (message, detail) => {
+            const answer = await vscode.window.showWarningMessage(
+                message,
+                { modal: true, detail },
+                { title: 'Yes, continue' },
+                { title: 'No', isCloseAffordance: true }
+            );
+            return !this.cancelled && answer?.title === 'Yes, continue';
+        });
     }
 
     private showDeviceInfo(device: string, message: string){
@@ -366,15 +388,16 @@ export class ThingerOTAInstance {
         return result;
     }
 
-    public async upload(device: string): Promise<OTAResult> {
-
-        // read firmware file
-        try{
-            this.file = await vscode.workspace.fs.readFile(this.firmware.path);
-        }catch(e: any){
-            vscode.window.showErrorMessage('Error while reading firmware file: ' + e);
-            return this.returnResult(device, { result: OTAUpdateResult.FAILURE, description: 'Error while reading firmware file' });
-        }
+    public async upload(device: string, parentCancellation?: vscode.CancellationToken): Promise<OTAResult> {
+        // Each device gets independent cancellation and preflight state. Keep the
+        // bytes already inspected by PlatformIO; do not reopen a mutable path.
+        this.file = this.firmware.data;
+        this.cancelTokenSource = axios.CancelToken.source();
+        this.sent = 0;
+        this.chunkSize = 8192;
+        this.cancelled = false;
+        this.deflated = undefined;
+        this.startTime = new Date();
 
         // start a progress window for the upload
         return vscode.window.withProgress({
@@ -384,36 +407,43 @@ export class ThingerOTAInstance {
         }, async (progress, cancelToken): Promise<OTAResult> => {
 
             // register cancel action over upload
-            cancelToken.onCancellationRequested(() => {
+            const cancel = () => {
                 this.cancelTokenSource.cancel();
                 this.cancelled = true;
-            });
+            };
+            const cancellation = cancelToken.onCancellationRequested(cancel);
+            const parentListener = parentCancellation?.onCancellationRequested(cancel);
 
-            if(!this.cancelled){  
-                 // initialize the OTA process
-                const result = await this.initializeOTA(device, progress);
-                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
+            if (cancelToken.isCancellationRequested || parentCancellation?.isCancellationRequested) {
+                cancel();
             }
 
-            if(!this.cancelled){  
-                // begin the OTA process
-                const result = await this.beginOTA(device, progress);
-                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
-            }
+            try {
+                if (!this.cancelled) {
+                    const result = await this.initializeOTA(device, progress);
+                    if (result.result !== OTAUpdateResult.SUCCESS) { return this.returnResult(device, result); }
+                }
 
-            if(!this.cancelled){  
-                // write the OTA 
-                const result = await this.writeOTA(device, progress);
-                if(result.result!==OTAUpdateResult.SUCCESS) {return this.returnResult(device, result);}
-            }
+                if (!this.cancelled) {
+                    const result = await this.beginOTA(device, progress);
+                    if (result.result !== OTAUpdateResult.SUCCESS) { return this.returnResult(device, result); }
+                }
 
-            if(!this.cancelled){  
-                // end the OTA 
-                const result = await this.endOTA(device, progress);
-                return this.returnResult(device, result);
+                if (!this.cancelled) {
+                    const result = await this.writeOTA(device, progress);
+                    if (result.result !== OTAUpdateResult.SUCCESS) { return this.returnResult(device, result); }
+                }
+
+                if (!this.cancelled) {
+                    const result = await this.endOTA(device, progress);
+                    return this.returnResult(device, result);
+                }
+
+                return this.returnResult(device, { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' });
+            } finally {
+                cancellation.dispose();
+                parentListener?.dispose();
             }
-            
-            return { result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' };
         });
     }
 }

@@ -57,6 +57,13 @@ export class ThingerAPI {
         return this.axiosInstance.post(resource, options, config);
     }
 
+    public async getDeviceOTACheck(device: string, cancelToken?: CancelToken, timeout?: number) {
+        const config = await this.createConfig(cancelToken, timeout);
+        const user = await this.config.getUser();
+        const resource = `/v3/users/${user}/devices/${encodeURIComponent(device)}/resources/THINGER_OTA_CHECK`;
+        return this.axiosInstance.get(resource, config);
+    }
+
     public async writeDeviceOTA(device: string, data: any, cancelToken?: CancelToken, timeout?: number) {
         const config = await this.createConfig(cancelToken, timeout);
         const user = await this.config.getUser();

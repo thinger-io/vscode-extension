@@ -1,5 +1,15 @@
 # Release Notes
 
+## Unreleased
+
+- Compare ESP32 `THINGER_OTA_CHECK` fields with the candidate binary before OTA;
+  show differences and require explicit per-device confirmation to override them.
+- Warn and require confirmation for missing metadata; stop on invalid metadata or
+  resource errors. Preserve checks when firmware versions are equal.
+- Use one firmware snapshot for inspection and transmission, and reset cancellation
+  per device while honoring cancellation of product uploads.
+- Add parser, upload-flow and ESP32 binary interoperability checks.
+
 ## Version 1.1.7 (2026-10-18)
 
 ### Documentation

@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import path = require('path');
-import * as fs from 'fs';
+import { extractOTACheck, OTACheckMetadata } from './ota-check';
 
 export interface ThingerFirmware{
-    path: vscode.Uri;
-    environment: string;
-    version: string | null;
+    readonly path: vscode.Uri;
+    readonly environment: string;
+    readonly version: string | null;
+    readonly data: Uint8Array;
+    readonly check: OTACheckMetadata | null;
 }
 
 export class Platformio{
@@ -66,9 +68,8 @@ export class Platformio{
     }
 
     // Function to extract the version from the binary file
-    private extractVersionFromFirmware(firmwarePath: string): string | null {
-        // Read the binary file
-        const firmwareBuffer = fs.readFileSync(firmwarePath);
+    private extractVersionFromFirmware(firmware: Uint8Array): string | null {
+        const firmwareBuffer = Buffer.from(firmware);
         
         // Convert the buffer to a string
         const firmwareString = firmwareBuffer.toString('binary');
@@ -152,15 +153,20 @@ export class Platformio{
         const firmwareFile = envs[environment].path;
         if (!firmwareFile) {return;}
 
-        // extract version from firmware
-        const version = this.extractVersionFromFirmware(firmwareFile.fsPath);
-
-        // get firmware file path
-        return {
-            path: envs[environment].path,
-            environment: environment,
-            version: version
-        };
+        try {
+            // Freeze the upload to this snapshot, even if the file is rebuilt later.
+            const data = new Uint8Array(await vscode.workspace.fs.readFile(firmwareFile));
+            return {
+                path: firmwareFile,
+                environment,
+                version: this.extractVersionFromFirmware(data),
+                data,
+                check: extractOTACheck(data)
+            };
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Cannot read firmware compatibility metadata: ${error.message}`);
+            return undefined;
+        }
     }
     
 }
