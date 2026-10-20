@@ -39,7 +39,7 @@ export class ThingerOTA {
             const results: OTAResult[] = [];
 
             try {
-                const otaInstance = new ThingerOTAInstance(this.api, firmware, environment);
+                const otaInstance = new ThingerOTAInstance(this.api, firmware, environment, true);
                 const response = await this.api.getProductDevices(target.id, cancelTokenSource.token);
                 const devices = response?.data;
 
@@ -59,7 +59,7 @@ export class ThingerOTA {
                     if (cancelled) {
                         results.push({ device: device, result: OTAUpdateResult.FAILURE, description: 'Operation cancelled' });
                     } else {
-                        const result = await otaInstance.upload(device);
+                        const result = await otaInstance.upload(device, cancelToken);
                         results.push(result);
                     }
 

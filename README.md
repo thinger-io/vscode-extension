@@ -27,6 +27,28 @@ This extension integrates with PlatformIO to automatically build and upload the 
 * Automatic build and upload over the Internet in a single click
 * OTA with compression (zlib, gzip or lzss, as requested by the device)
 * Per-device OTA timeout and block size, with optional overrides for slow connections
+* OTA check: warns before installing a firmware built for different hardware
+
+## OTA Check
+
+Devices sharing the same board can have different hardware (PCB model, sensors, display...). To avoid installing the wrong firmware, declare the hardware fields in the sketch before including the OTA header (requires Thinger.io Arduino Library 2.47.0 or newer):
+
+```cpp
+#define THINGER_OTA_CHECK(FIELD) \
+    FIELD("PCB_MODEL", "SENSOR_I2C") \
+    FIELD("PCB_VERSION", "V2")
+#include <ThingerESP32OTA.h>
+```
+
+The fields are embedded in the firmware and reported by the device. Before updating, the extension compares the fields of the running device with the ones of the new firmware:
+
+* Equal fields: the update starts as usual.
+* Different fields, or a firmware without fields for a device that has them: the changed, added and removed fields are shown, and the update needs confirmation. When updating a product, the answer can be applied to all its devices (**Continue for All** or **Skip All**).
+* Devices without fields are updated as usual.
+
+An equal firmware version does not skip the update when the fields do not match. Fields are case-sensitive strings: up to 16 fields, with keys up to 32 bytes and values up to 128 bytes.
+
+The device also enforces the check: it rejects any update whose fields are not equal to its own, unless the update was confirmed. Devices with OTA check require this extension version 1.2.0 or newer.
 
 ## Recommendations
 
@@ -35,7 +57,7 @@ This extension integrates with PlatformIO to automatically build and upload the 
 ## Requirements
 
 * VSCode PlatformIO extension for building firmware.
-* Thinger.io Arduino Library (2.41.0 or newer for per-device timeouts, 2.42.0 or newer for Raspberry Pi Pico).
+* Thinger.io Arduino Library (2.41.0 or newer for per-device timeouts, 2.42.0 or newer for Raspberry Pi Pico, 2.47.0 or newer for OTA check).
 
 ## Extension Settings
 
