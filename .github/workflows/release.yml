@@ -1,0 +1,66 @@
+# Publishes a new version when a tag vX.Y.Z matching package.json is pushed:
+# VS Code Marketplace, Open VSX and a GitHub release with the .vsix and the CHANGELOG notes.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check tag matches package.json version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VSIX=thinger-io-$VERSION.vsix" >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Package
+        run: npx --yes @vscode/vsce@4.0.0 package --out "$VSIX"
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          awk -v header="## Version $VERSION " '
+            index($0, header) == 1 { found = 1; next }
+            found && /^## Version / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for version $VERSION"
+            exit 1
+          fi
+
+      - name: Publish to VS Code Marketplace
+        run: npx --yes @vscode/vsce@4.0.0 publish --packagePath "$VSIX"
+
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        run: npx --yes ovsx@1.2.0 publish "$VSIX" --pat "$OVSX_PAT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$VSIX" --title "$VERSION" --notes-file release-notes.md
