@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 1.2.0 (2026-10-20)
+
+### OTA Check
+
+    Requires Arduino Library 2.47.0 or newer for OTA check support.
+
+- **Hardware compatibility check**: Firmware built with `THINGER_OTA_CHECK` embeds hardware fields (PCB model, version...) that are compared with the fields reported by the device before the update. Mismatching fields, or a firmware without fields for a device that has them, require confirmation. Product updates offer **Continue for All** and **Skip All**. Devices without fields are updated as before. Based on the proposal of @swinp in #8.
+- **Equal version with different hardware**: An equal firmware version no longer skips the update when the fields do not match.
+- **Device enforcement**: The firmware fields are sent to the device when starting the update (`check`), together with `force` when the user confirmed a mismatch. Devices with OTA check reject updates from older extension versions.
+
+### Improvements
+
+- **Single firmware snapshot**: The firmware is read once after the build and the same bytes are used for the version, the OTA check, compression, checksums and upload.
+- **Product updates**: Cancellation and compression state are reset for every device, and cancelling the product update stops the current device.
 ## Version 1.1.7 (2026-10-18)
 
 ### Documentation
