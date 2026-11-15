@@ -30,8 +30,12 @@ class OTAReport {
     this.failureCount = 0;
     this.alreadyUpdatedCount = 0;
 
+    const otaBlockSize = vscode.workspace
+      .getConfiguration('thinger-io')
+      .get<number>('otaBlockSize', 0);
+
     const timestamp = this.startTime.toISOString();
-    const logMessage = `${timestamp} [info] OTA update process started. ${target.type==='device' ? 'Device' : 'Product'}: ${target.id}, Firmware Version: ${firmware.version}, Environment: ${firmware.environment}`;
+    const logMessage = `${timestamp} [info] OTA update process started. ${target.type==='device' ? 'Device' : 'Product'}: ${target.id}, Firmware Version: ${firmware.version}, Environment: ${firmware.environment}, thinger-io.otaBlockSize: ${otaBlockSize}`;
     this.logMessages.push(logMessage);
     this.outputChannel.appendLine(logMessage);
   }
@@ -51,6 +55,21 @@ class OTAReport {
       this.logMessages.push(logMessage);
       this.outputChannel.appendLine(logMessage);
     }
+  }
+
+  /**
+   * Logs the effective OTA block size for a device.
+   * @param device - The device identifier.
+   * @param blockSize - The effective block size in bytes.
+   */
+  public logBlockSize(device: string, blockSize: number) {
+    if (!this.outputChannel) { return; }
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `${timestamp} [info] Device: ${device}, Effective OTA block size: ${blockSize} bytes`;
+
+    this.logMessages.push(logMessage);
+    this.outputChannel.appendLine(logMessage);
   }
 
   /**

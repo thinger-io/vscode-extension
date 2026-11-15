@@ -311,6 +311,8 @@ export class ThingerOTAInstance {
     }
 
     private async writeOTA(device: string, progress: vscode.Progress<{ message?: string; increment?: number }>) : Promise<OTAResult>{            
+        otaReport.logBlockSize(device, this.chunkSize);
+
         // determine final binary size and number of chunks to send
         const otaFirmware = this.deflated && this.deflated.byteLength > 0 ? this.deflated : this.file;
         const otaSize = otaFirmware.byteLength;
